@@ -291,21 +291,52 @@ class ConsulPlugin(object):
 		'''
 		self.consul_agent.update_local_config()
 		metric_records = []
-		metric_records.extend(self._fetch_telemetry_metrics())
-		metric_records.extend(self._fetch_node_network_metrics())
 		'''
 		Metrics to be sent if instance is currently the leader in it's datacenter.
 		'''
 		if self.consul_agent.is_leader():
-			metric_records.extend(self._fetch_catalog_metrics())
-			metric_records.extend(self._fetch_dc_network_metrics())
 			metric_records.extend(self._fetch_peers())
+			metric_records.extend(self._fetch_catalog_metrics())
 			metric_records.extend(self._fetch_health_ckecks())
+			metric_records.extend(self._fetch_dc_network_metrics())
+			metric_records.extend(self._fetch_server_state_leader())
+		else:
+			''' collect only if instance is not the leader
+			'''
+			metric_records.extend(self._fetch_server_state())
+		''' collected by all instances
+		'''
+		metric_records.extend(self._fetch_telemetry_metrics())
+		metric_records.extend(self._fetch_node_network_metrics())
 		'''
 		Emit all gathered metrics
 		'''
 		for metric_record in metric_records:
 			self.metric_sink.emit(metric_record)
+
+	def _fetch_server_state(self):
+		'''
+		If the current instance is running in server mode and is a follower
+		'''
+		dimensions = {}
+		metric_records = []
+		if self.consul_agent.config['Server']:
+			dimensions['consul_server_state'] = 'follower'
+			dimensions.update(self.global_dimensions)
+			metric_records.append(MetricRecord(consul_server_state.name, consul_server_state.type, 0, dimensions, time.time()))
+		
+		return metric_records
+
+	def _fetch_server_state_leader(self):
+		'''
+		Only leader instance calls this function to update the consul_server_state metric
+		'''
+		metric_records = []
+		dimensions = {'consul_server_state' : 'leader'}
+		dimensions.update(self.global_dimensions)
+		metric_records.append(MetricRecord(consul_server_state.name, consul_server_state.type, 1, dimensions, time.time()))
+		
+		return metric_records
 
 	def _fetch_peers(self):
 		'''
@@ -378,6 +409,7 @@ class ConsulPlugin(object):
 			metric_records.append(MetricRecord(node_network_latency_avg.name, node_network_latency_avg.type, latencies['avg'], self.global_dimensions, time.time()))
 			metric_records.append(MetricRecord(node_network_latency_min.name, node_network_latency_min.type, latencies['min'], self.global_dimensions, time.time()))
 			metric_records.append(MetricRecord(node_network_latency_max.name, node_network_latency_max.type, latencies['max'], self.global_dimensions, time.time()))
+		
 		return metric_records
 
 	def _fetch_health_ckecks(self):
