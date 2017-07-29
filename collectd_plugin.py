@@ -14,6 +14,7 @@ API_PORT = 'ApiPort'
 TELEMETRY_HOST = 'TelemetryHost'
 TELEMETRY_PORT = 'TelemetryPort'
 ACL_TOKEN = 'AclToken'
+SFX_TOKEN = 'SignalFxToken'
 DIMENSION = 'Dimension'
 DIMENSIONS = 'Dimensions'
 DEBUG_LOG_LEVEL = 'DebugLogLevel'
@@ -189,8 +190,14 @@ class UDPServer(threading.Thread):
 							metric_name = metric_split.pop(0)
 							metric_split = metric_split[0].split('|')
 							if len(metric_split) == 2 and '' not in metric_split:
-								metric_type = 'counter' if metric_split[1] == 'c' else 'gauge'
-								metric_value = float(metric_split[0]) if metric_type != 'counter' else int(float(metric_split[0]))
+								# metric_type = 'counter' if metric_split[1] == 'c' else 'gauge'
+								metric_type = 'gauge'
+								if metric_split[1] == 'c' and metric_name in metrics:
+									metric_value = metrics[metric_name]['value'] + int(float(metric_split[0]))
+									# LOGGER.info('found a counter value - {0}, {1}'.format(metric_name, metric_value))
+								else:
+									metric_value = float(metric_split[0]) if metric_split[1] != 'c' else int(float(metric_split[0]))
+									#if metric_type != 'counter' else int(float(metric_split[0]))
 								metrics[metric_name] = {'type': metric_type, 'value': metric_value, 'timestamp': time.time()}
 							else:
 								'''
@@ -218,20 +225,26 @@ class UDPServer(threading.Thread):
 		except socket.error, e:
 			LOGGER.error('Error in UDP socket at {0}:{1} : {2}'.format(self._host, self._port, e))
 
+consul_server_state = MetricDefinition('consul.is_leader', 'gauge')
 consul_peers = MetricDefinition('consul.peers', 'gauge')
+
 catalog_services = MetricDefinition('consul.catalog.services.total', 'gauge')
 catalog_nodes	= MetricDefinition('consul.catalog.nodes.total', 'gauge')
-catalog_nodes_per_service = MetricDefinition('consul.catalog.nodes', 'gauge')
-catalog_services_per_node =	MetricDefinition('consul.catalog.services', 'gauge')
+catalog_nodes_by_service = MetricDefinition('consul.catalog.nodes_by_service', 'gauge')
+catalog_services_by_node =	MetricDefinition('consul.catalog.services_by_node', 'gauge')
+
 dc_network_latency_avg = MetricDefinition('consul.network.dc.latency.avg', 'gauge')
 dc_network_latency_min = MetricDefinition('consul.network.dc.latency.min', 'gauge')
 dc_network_latency_max = MetricDefinition('consul.network.dc.latency.max', 'gauge')
+
 node_network_latency_avg = MetricDefinition('consul.network.node.latency.avg', 'gauge')
 node_network_latency_min = MetricDefinition('consul.network.node.latency.min', 'gauge')
 node_network_latency_max = MetricDefinition('consul.network.node.latency.max', 'gauge')
+
 health_services_passing = MetricDefinition('consul.health.services.passing', 'gauge')
 health_services_warning = MetricDefinition('consul.health.services.warning', 'gauge')
 health_services_critical = MetricDefinition('consul.health.services.critical', 'gauge')
+
 health_nodes_passing = MetricDefinition('consul.health.nodes.passing', 'gauge')
 health_nodes_warning = MetricDefinition('consul.health.nodes.warning', 'gauge')
 health_nodes_critical = MetricDefinition('consul.health.nodes.critical', 'gauge')
@@ -261,6 +274,7 @@ class ConsulPlugin(object):
 		telemetry_host = '127.0.0.1'
 		telemetry_port = 8125
 		acl_token = None
+		sfx_token = None
 
 		for node in conf.children:
 			if node.key == API_HOST:
@@ -278,10 +292,13 @@ class ConsulPlugin(object):
 			elif node.key == DIMENSIONS or node.key == DIMENSION:
 				self.global_dimensions.update(self._dimensions_str_to_dict(node.values[0]))
 			elif self._check_bool_config_enabled(node, DEBUG_LOG_LEVEL):
-				log_handler.debug = self._str_to_bool(node.values[0])
+				LOGGER.debug = self._str_to_bool(node.values[0])
+			elif node.key == SFX_TOKEN:
+				sfx_token = (node.values[0])
+				LOGGER.info('Sfx token {0}'.format(sfx_token))
 
 		self.udp_server = UDPServer(telemetry_host, telemetry_port)
-		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token)
+		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token, sfx_token)
 		self.global_dimensions.update(self.consul_agent.get_global_dimensions())
 		self.metric_sink = MetricSink()
 
@@ -356,26 +373,26 @@ class ConsulPlugin(object):
 		'''
 		metric_records = []
 
-		service_to_nodes_map = self.consul_agent.get_service_to_nodes_map()
-		node_to_services_map = self.consul_agent.get_node_to_services_map()
+		catalog_map = self.consul_agent.get_catalog_map()
+		total_nodes = len(catalog_map['Nodes'])
+		total_services = len(catalog_map['Services'])
 
-		metric_records.append(MetricRecord(catalog_services.name, catalog_services.type, len(service_to_nodes_map), self.global_dimensions, time.time()))
-		metric_records.append(MetricRecord(catalog_nodes.name, catalog_nodes.type, len(node_to_services_map), self.global_dimensions, time.time()))
+		metric_records.append(MetricRecord(catalog_services.name, catalog_services.type, total_services, self.global_dimensions, time.time()))
+		metric_records.append(MetricRecord(catalog_nodes.name, catalog_nodes.type, total_nodes, self.global_dimensions, time.time()))
 
-		for service, num_nodes in service_to_nodes_map.iteritems():
+		for service, num_nodes in catalog_map['Services'].iteritems():
 			dimensions = {'consul_service':service}
 			dimensions.update(self.global_dimensions)
 			del dimensions['consul_node']
-			metric_records.append(MetricRecord(catalog_nodes_per_service.name, catalog_nodes_per_service.type, num_nodes, dimensions, time.time()))
+			metric_records.append(MetricRecord(catalog_nodes_by_service.name, catalog_nodes_by_service.type, num_nodes, dimensions, time.time()))
 
-		for node, services in node_to_services_map.iteritems():
+		for node, num_services in catalog_map['Nodes'].iteritems():
 			dimensions = {}
 			dimensions.update(self.global_dimensions)
 			dimensions['consul_node'] = node
-			metric_records.append(MetricRecord(catalog_services_per_node.name, catalog_services_per_node.type, len(services), dimensions, time.time()))
-		
-		return metric_records
+			metric_records.append(MetricRecord(catalog_services_by_node.name, catalog_services_by_node.type, num_services, dimensions, time.time()))
 
+		return metric_records
 
 	def _fetch_dc_network_metrics(self):
 		'''
@@ -483,13 +500,6 @@ class ConsulPlugin(object):
 			return True
 		return False
 
-	def _get_metric_type(self, val):
-
-		if val in ['g', 'ms']:
-			return 'gauge'
-		if val == 'c':
-			return 'counter'
-
 	def _format_dimensions(self, dimensions):
 		'''
 		Formats a dictionary of key/value pairs as a comma-delimited list of key=value tokens.
@@ -576,11 +586,12 @@ class ConsulAgent(object):
 	Helper class for interacting with consul's http api
 	'''
 
-	def __init__(self, api_host='localhost', api_port=8500, api_protocol='http', acl_token=None):
+	def __init__(self, api_host='localhost', api_port=8500, api_protocol='http', acl_token=None, sfx_token=None):
 		
 		self.api_host = api_host
 		self.api_port = api_port
 		self.api_protocol = api_protocol
+		self.sfx_token = sfx_token
 
 		# If acl_token provided, add to header
 		self.acl_token = acl_token
@@ -617,8 +628,13 @@ class ConsulAgent(object):
 		Health check endpoint
 		'''
 		self.health_checks_url = '{0}/v1/health/state/any'.format(self.base_url)
+		'''
+		Ingest Url to send event
+		'''
+		self._ingest_url = 'https://ingest.signalfx.com/v2/event'
 
 		self.config = None
+		self.last_leader = self.get_dc_leader()
 		self.update_local_config()
 
 	def update_local_config(self):
@@ -634,11 +650,11 @@ class ConsulAgent(object):
 	def get_nodes_in_dc(self):
 		return self._send_request(self.list_nodes_url)
 
-	def get_services_in_dc(self):
-		return self._send_request(self.list_services_url)
+	# def get_services_in_dc(self):
+	# 	return self._send_request(self.list_services_url)
 
-	def get_nodes_for_service(self, service):
-		return self._send_request(self.list_nodes_for_service_url + '/{0}'.format(service))
+	# def get_nodes_for_service(self, service):
+	# 	return self._send_request(self.list_nodes_for_service_url + '/{0}'.format(service))
 
 	def get_services_for_node(self, node):
 		return self._send_request(self.list_services_for_node_url + '/{0}'.format(node))
@@ -665,42 +681,53 @@ class ConsulAgent(object):
 									self.config['Ports']['Server'])
 		
 		if curr_leader == agent_addr:
+			if (self.last_leader != curr_leader) and self.sfx_token :
+				LOGGER.info('Change in leader.')
+				dimensions = {'old_leader': self.last_leader.split(':')[0],\
+				'new_leader': curr_leader.split(':')[0], 'datacenter':self.config['Datacenter']}
+				self._send_leader_change_event(dimensions)
 			return True
+
+		self.last_leader = curr_leader
 		
 		if not curr_leader:
 			LOGGER.warn('Did not find any consul cluster leader.')
 		
 		return False
 
-	def get_service_to_nodes_map(self):
+	def get_catalog_map(self):
 		'''
-		returns a dictionary with service name as key and 
-		number of nodes providing the service in given dc as value.
-		'''
-		services = self.get_services_in_dc()
-		service_to_nodes_map ={}
-
-		for service, _ in services.iteritems():
-			service_to_nodes_map[service] = len(self.get_nodes_for_service(service))
-
-		return service_to_nodes_map
-
-	def get_node_to_services_map(self):
-		'''
-		returns a dictionary with node name as key and 
-		services provided as value.
+		returns a dictionary with count of services on a node and the number of nodes providing a service.
+		Ex - { 'Nodes': {
+				'node_1': 2, 'nodes_2': 1 },
+				'Services': {
+				'web': 1, 'consul': 2, 'redis': 1
+				}		
+			} 
+		This means node_1 is providing 2 services while the service 'web' is running on 1 node
 		'''
 		nodes = self.get_nodes_in_dc()
 		node_to_services_map = {}
+		service_to_nodes_map ={}
+		catalog_map = {}
 
 		for node in nodes:
-			node_id = node['Node']
-			node_to_services_map[node_id] = []
+			seen_services = set()
+			node_id = node['Node'] or node['ID']
 			services = self.get_services_for_node(node_id)
-			for service, _ in services['Services'].iteritems():
-				node_to_services_map[node_id].append(service)
+			node_to_services_map[node_id] = len(services['Services'])
 
-		return node_to_services_map
+			for k,v in services['Services'].iteritems():
+				if v['Service'] not in seen_services:
+					'''
+					in case multiple instances of same service is running on a node
+					'''
+					seen_services.add(v['Service'])
+					service_to_nodes_map[v['Service']] = service_to_nodes_map.get(v['Service'], 0) + 1
+
+		catalog_map = {'Nodes' : node_to_services_map, 'Services': service_to_nodes_map}
+		
+		return catalog_map 
 
 	def calculate_inter_dc_latency(self):
 		'''
@@ -780,10 +807,29 @@ class ConsulAgent(object):
 		datacenter the consul node belongs to, node name, and node id.
 		'''
 		dimensions = {}
-		dimensions['consul_dc'] = self.config['Datacenter']
+		dimensions['datacenter'] = self.config['Datacenter']
 		dimensions['consul_node'] = self.config['NodeName'] or self.config['NodeID']
 
 		return dimensions
+
+	def _send_leader_change_event(self, dimensions):
+		'''
+		send an event to signalfx on leader transition
+		'''
+		payload = [{
+		'category': 'USER_DEFINED',
+		'eventType': 'consul leader changed',
+		'dimensions': dimensions,
+		'timestamp': time.time()
+		}]
+		headers = {'Content-Type': 'application/json', 'X-SF-TOKEN': self.sfx_token}
+		
+		try:
+			response = requests.post(self._ingest_url, headers=headers, json=payload)
+			if response.status.code != requests.codes.ok:
+				LOGGER.error('Unexpected status code: {0}, received while sending event to SignalFx'.format(response.status_code))
+		except requests.exceptions.RequestException as e:
+			LOGGER.error('Failed request to SignalFx\'s event endpoint: {0}'.format(e))
 
 	def _send_request(self, url, parameters=None):
 		'''
