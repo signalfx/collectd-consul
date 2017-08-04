@@ -59,7 +59,7 @@ class CollectdLogHandler(logging.Handler):
 			debug  -- boolean to enable debug level logging, defaults to false
 		'''
 		self.plugin_name = plugin_name
-		self.debug = debug
+		self.enable_debug = debug
 
 		logging.Handler.__init__(self, level=logging.NOTSET)
 
@@ -292,10 +292,9 @@ class ConsulPlugin(object):
 			elif node.key == DIMENSIONS or node.key == DIMENSION:
 				self.global_dimensions.update(self._dimensions_str_to_dict(node.values[0]))
 			elif self._check_bool_config_enabled(node, DEBUG_LOG_LEVEL):
-				LOGGER.debug = self._str_to_bool(node.values[0])
+				LOGGER.enable_debug = self._str_to_bool(node.values[0])
 			elif node.key == SFX_TOKEN:
 				sfx_token = (node.values[0])
-				LOGGER.info('Sfx token {0}'.format(sfx_token))
 
 		self.udp_server = UDPServer(telemetry_host, telemetry_port)
 		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token, sfx_token)
@@ -631,7 +630,8 @@ class ConsulAgent(object):
 		'''
 		Ingest Url to send event
 		'''
-		self._ingest_url = 'https://ingest.signalfx.com/v2/event'
+		# self._event_url = 'http://lab-ingest.corp.signalfuse.com:8080/v2/event'
+		self._event_url = 'https://ingest.signalfx.com/v2/event'
 
 		self.config = None
 		self.last_leader = self.get_dc_leader()
@@ -686,6 +686,7 @@ class ConsulAgent(object):
 				dimensions = {'old_leader': self.last_leader.split(':')[0],\
 				'new_leader': curr_leader.split(':')[0], 'datacenter':self.config['Datacenter']}
 				self._send_leader_change_event(dimensions)
+				self.last_leader = curr_leader
 			return True
 
 		self.last_leader = curr_leader
@@ -820,13 +821,13 @@ class ConsulAgent(object):
 		'category': 'USER_DEFINED',
 		'eventType': 'consul leader changed',
 		'dimensions': dimensions,
-		'timestamp': time.time()
+		'timestamp': int(time.time() * 1000)
 		}]
 		headers = {'Content-Type': 'application/json', 'X-SF-TOKEN': self.sfx_token}
 		
 		try:
-			response = requests.post(self._ingest_url, headers=headers, json=payload)
-			if response.status.code != requests.codes.ok:
+			response = requests.post(self._event_url, headers=headers, json=payload)
+			if response.status_code != requests.codes.ok:
 				LOGGER.error('Unexpected status code: {0}, received while sending event to SignalFx'.format(response.status_code))
 		except requests.exceptions.RequestException as e:
 			LOGGER.error('Failed request to SignalFx\'s event endpoint: {0}'.format(e))
