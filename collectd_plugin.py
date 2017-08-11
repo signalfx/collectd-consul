@@ -11,13 +11,13 @@ PLUGIN = 'consul'
 API_PROTOCOL = 'ApiProtocol'
 API_HOST = 'ApiHost'
 API_PORT = 'ApiPort'
+TELEMETRY_SERVER = 'TelemetryServer'
 TELEMETRY_HOST = 'TelemetryHost'
 TELEMETRY_PORT = 'TelemetryPort'
 ACL_TOKEN = 'AclToken'
 SFX_TOKEN = 'SignalFxToken'
 DIMENSION = 'Dimension'
 DIMENSIONS = 'Dimensions'
-DEBUG_LOG_LEVEL = 'DebugLogLevel'
 
 def compute_rtt( coord_a, coord_b):
 	'''
@@ -153,7 +153,7 @@ class UDPServer(threading.Thread):
 	Creates a thread which receives packets from Consul agent on a UDP socket.
 	The timeout interval ensures that the thread does not block on a receive call.
 	'''
-	def __init__(self, host, port, max_buffer_size = 8192, timeout_interval = 20):
+	def __init__(self, host, port, max_buffer_size = 1432, timeout_interval = 20):
 		
 		threading.Thread.__init__(self)
 		#self.daemon = True
@@ -164,6 +164,7 @@ class UDPServer(threading.Thread):
 		self.lock = threading.Lock()
 		self.stats = {}
 		self.terminate = threading.Event()
+		self.read_complete = threading.Event()
 		self.start()
 
 	def run(self):
@@ -175,11 +176,16 @@ class UDPServer(threading.Thread):
 			self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.socket.bind((self._host, self._port))
 			self.socket.settimeout(self._timeout)
-
+			
+			metrics = {}
+			timers = {}
 			while not self.terminate.isSet():
 				try:
 					data, addr = self.socket.recvfrom(self._bufsize)
-					metrics = {}
+					if self.read_complete.isSet():
+						metrics.clear()
+						timers.clear()
+						self.read_complete.clear()
 					'''
 					Sanitize the data from udp packets.
 					Store only the latest value of metric, in case a packet has multiple instances of a metric.
@@ -190,15 +196,27 @@ class UDPServer(threading.Thread):
 							metric_name = metric_split.pop(0)
 							metric_split = metric_split[0].split('|')
 							if len(metric_split) == 2 and '' not in metric_split:
-								# metric_type = 'counter' if metric_split[1] == 'c' else 'gauge'
 								metric_type = 'gauge'
 								if metric_split[1] == 'c' and metric_name in metrics:
-									metric_value = metrics[metric_name]['value'] + int(float(metric_split[0]))
-									# LOGGER.info('found a counter value - {0}, {1}'.format(metric_name, metric_value))
-								else:
-									metric_value = float(metric_split[0]) if metric_split[1] != 'c' else int(float(metric_split[0]))
-									#if metric_type != 'counter' else int(float(metric_split[0]))
-								metrics[metric_name] = {'type': metric_type, 'value': metric_value, 'timestamp': time.time()}
+									metrics[metric_name] = {'type': metric_type, \
+															'value': metrics[metric_name]['value'] + int(float(metric_split[0])),\
+															'timestamp': time.time()}					
+								elif metric_split[1] in ['c', 'g']:
+									metrics[metric_name] = {'type': metric_type,\
+															'value': float(metric_split[0]) if metric_split[1] != 'c' else int(float(metric_split[0])),\
+															'timestamp': time.time()}
+								elif metric_split[1] == 'ms':
+									timers[metric_name] = timers.get(metric_name, [])
+									timers[metric_name].append(float(metric_split[0]))
+									metrics['{0}_mean'.format(metric_name)] = {'type': metric_type,\
+									'value': reduce(lambda x,y: x + y, timers[metric_name])/len(timers[metric_name]),\
+									'timestamp': time.time()}
+									metrics['{0}_min'.format(metric_name)] = {'type': metric_type,\
+									'value' : min(timers[metric_name]),\
+									'timestamp': time.time()}
+									metrics['{0}_max'.format(metric_name)] = {'type': metric_type,\
+									'value' : max(timers[metric_name]),\
+									'timestamp': time.time()}
 							else:
 								'''
 								In case the packet was truncated while receiving.
@@ -271,6 +289,7 @@ class ConsulPlugin(object):
 		api_host = 'localhost'
 		api_port = 8500
 		api_protocol = 'http'
+		telemetry_server = False
 		telemetry_host = '127.0.0.1'
 		telemetry_port = 8125
 		acl_token = None
@@ -283,6 +302,8 @@ class ConsulPlugin(object):
 				api_port = int(node.values[0])
 			elif node.key == API_PROTOCOL:
 				api_protocol = node.values[0]
+			elif self._check_bool_config_enabled(node, TELEMETRY_SERVER):
+				telemetry_server = self._str_to_bool(node.values[0])
 			elif node.key == TELEMETRY_HOST:
 				telemetry_host = node.values[0]
 			elif node.key == TELEMETRY_PORT:
@@ -291,12 +312,12 @@ class ConsulPlugin(object):
 				acl_token = node.values[0]
 			elif node.key == DIMENSIONS or node.key == DIMENSION:
 				self.global_dimensions.update(self._dimensions_str_to_dict(node.values[0]))
-			elif self._check_bool_config_enabled(node, DEBUG_LOG_LEVEL):
-				LOGGER.enable_debug = self._str_to_bool(node.values[0])
 			elif node.key == SFX_TOKEN:
 				sfx_token = (node.values[0])
 
-		self.udp_server = UDPServer(telemetry_host, telemetry_port)
+		self.enable_server = telemetry_server
+		if self.enable_server:
+			self.udp_server = UDPServer(telemetry_host, telemetry_port)
 		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token, sfx_token)
 		self.global_dimensions.update(self.consul_agent.get_global_dimensions())
 		self.metric_sink = MetricSink()
@@ -451,16 +472,37 @@ class ConsulPlugin(object):
 	def _fetch_telemetry_metrics(self):
 
 		metric_records = []
-		# acquire lock on shared data
-		with self.udp_server.lock:
 
-			for metric_name, stat in self.udp_server.stats.items():
-				metric_records.append(MetricRecord(metric_name, stat['type'], stat['value'], self.global_dimensions, stat['timestamp']))
-				'''
-				delete the metric to make sure we do not read a stale metric again, 
-				in case the metric value is not updated between two reads. (avoids 'value too old' warning from collectd)
-				'''
-				del self.udp_server.stats[metric_name]
+		''' get telemetry data from either the udp server or the metrics endpoint'''
+		if self.enable_server:
+			''' acquire lock on shared data '''
+			with self.udp_server.lock:
+				for metric_name, stat in self.udp_server.stats.items():
+					metric_records.append(MetricRecord(metric_name, stat['type'], stat['value'], self.global_dimensions, stat['timestamp']))
+					'''
+					delete the metric to make sure we do not read a stale metric again, 
+					in case the metric value is not updated between two reads. (avoids 'value too old' warning from collectd)
+					'''
+					del self.udp_server.stats[metric_name]
+			self.udp_server.read_complete.set()
+
+		elif self.consul_agent.metrics_enabled:
+			''' get metrics and sanitize '''
+			metrics = self.consul_agent.get_metrics()
+			if metrics:
+				for metric_type, metrics_list in metrics.items():
+					for metric in metrics_list:
+						if metric_type == 'Gauges':
+							metric_records.append(MetricRecord(metric['Name'], 'gauge', metric['Value'], self.global_dimensions, time.time()))
+						elif metric_type == 'Counters':
+							metric_records.append(MetricRecord(metric['Name'], 'gauge', metric['Sum'], self.global_dimensions, time.time()))
+						elif metric_type == 'Samples':
+							metric_mean = '{0}_mean'.format(metric['Name'])
+							metric_max = '{0}_max'.format(metric['Name'])
+							metric_min = '{0}_min'.format(metric['Name'])
+							metric_records.append(MetricRecord(metric_mean, 'gauge', metric['Mean'], self.global_dimensions, time.time()))
+							metric_records.append(MetricRecord(metric_max, 'gauge', metric['Max'], self.global_dimensions, time.time()))
+							metric_records.append(MetricRecord(metric_min, 'gauge', metric['Min'], self.global_dimensions, time.time()))
 
 		return metric_records
 
@@ -628,18 +670,34 @@ class ConsulAgent(object):
 		'''
 		self.health_checks_url = '{0}/v1/health/state/any'.format(self.base_url)
 		'''
+		endpoint to query telemetry data. Available in v 0.9.1
+		'''
+		self.list_metrics_url = '{0}/v1/agent/metrics'.format(self.base_url)
+		'''
 		Ingest Url to send event
 		'''
-		# self._event_url = 'http://lab-ingest.corp.signalfuse.com:8080/v2/event'
-		self._event_url = 'https://ingest.signalfx.com/v2/event'
+		self._event_url = 'http://lab-ingest.corp.signalfuse.com:8080/v2/event'
+		# self._event_url = 'https://ingest.signalfx.com/v2/event'
 
 		self.config = None
+		self.metrics_enabled = False
 		self.last_leader = self.get_dc_leader()
 		self.update_local_config()
 
 	def update_local_config(self):
 		conf = self.get_local_config()
 		self.config = conf['Config']
+		self.check_metrics_endpoint_available()
+
+	def check_metrics_endpoint_available(self):
+		'''
+		/agent/metrics endpoint is available from version 0.9.2
+		'''
+		major, minor, revision = map(lambda x : int(x), self.config['Version'].split('.'))
+		
+		if (major == 0 and minor == 9 and revision >= 1) or major > 0:
+			self.metrics_enabled = True
+		else: self.metrics_enabled = False
 		
 	def get_local_config(self):
 		return self._send_request(self.local_config_url)
@@ -670,6 +728,9 @@ class ConsulAgent(object):
 
 	def get_health_checks(self):
 		return self._send_request(self.health_checks_url)
+
+	def get_metrics(self):
+		return self._send_request(self.list_metrics_url)
 
 	def is_leader(self):
 		'''
@@ -810,7 +871,10 @@ class ConsulAgent(object):
 		dimensions = {}
 		dimensions['datacenter'] = self.config['Datacenter']
 		dimensions['consul_node'] = self.config['NodeName'] or self.config['NodeID']
-
+		if self.config['Server']:
+			dimensions['consul_mode'] = 'server'
+		else:
+			dimensions['consul_mode'] = 'client'
 		return dimensions
 
 	def _send_leader_change_event(self, dimensions):
@@ -853,10 +917,10 @@ class ConsulAgent(object):
 LOG_FILE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 LOG_FILE_MESSAGE_FORMAT = '[%(levelname)s] [consul-collectd] [%(asctime)s UTC]: %(message)s'
 formatter = logging.Formatter(fmt=LOG_FILE_MESSAGE_FORMAT, datefmt=LOG_FILE_DATE_FORMAT)
-log_handler = CollectdLogHandler('consul-collectd', True)
+log_handler = CollectdLogHandler('consul-collectd', False)
 log_handler.setFormatter(formatter)
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)
+LOGGER.setLevel(logging.INFO)
 LOGGER.propagate = False
 LOGGER.addHandler(log_handler)
 
