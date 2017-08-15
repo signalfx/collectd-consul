@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 import socket
 import time
+import sys, os
 import logging
 import threading
 import requests
-import collectd
 
 PLUGIN = 'consul'
 
@@ -638,41 +638,39 @@ class ConsulAgent(object):
 		self.acl_token = acl_token
 		self.headers = {'X-Consul-Token': acl_token} if self.acl_token else None
 
-		self.base_url = '{0}://{1}:{2}'.format(self.api_protocol, self.api_host, self.api_port)
+		self.base_url = '{0}://{1}:{2}/v1'.format(self.api_protocol, self.api_host, self.api_port)
 
 		'''
 		Endpoint to get config of consul instance
 		'''
-		self.local_config_url = '{0}/v1/agent/self'.format(self.base_url)
+		self.local_config_url = '{0}/agent/self'.format(self.base_url)
 
 		'''
 		Catalog endpoints to get strongly consistent view of datacenters,
 		nodes (for given dc) and services (for given dc) running in Consul cluster.
 		'''
-		self.list_nodes_url = '{0}/v1/catalog/nodes'.format(self.base_url)
-		self.list_services_url = '{0}/v1/catalog/services'.format(self.base_url)
-		self.list_nodes_for_service_url = '{0}/v1/catalog/service'.format(self.base_url)
-		self.list_services_for_node_url = '{0}/v1/catalog/node'.format(self.base_url)
+		self.list_nodes_url = '{0}/catalog/nodes'.format(self.base_url)
+		self.list_services_for_node_url = '{0}/catalog/node'.format(self.base_url)
 
 		'''
 		Status endpoints to get leader and peers
 		'''
-		self.leader_status_url = '{0}/v1/status/leader'.format(self.base_url)
-		self.list_peers_url = '{0}/v1/status/peers'.format(self.base_url)
+		self.leader_status_url = '{0}/status/leader'.format(self.base_url)
+		self.list_peers_url = '{0}/status/peers'.format(self.base_url)
 
 		'''
 		Coordinate endpoints to get node coordinates
 		'''
-		self.list_wan_coordinates_url = '{0}/v1/coordinate/datacenters'.format(self.base_url)
-		self.list_lan_coordinates_url = '{0}/v1/coordinate/nodes'.format(self.base_url)
+		self.list_wan_coordinates_url = '{0}/coordinate/datacenters'.format(self.base_url)
+		self.list_lan_coordinates_url = '{0}/coordinate/nodes'.format(self.base_url)
 		'''
 		Health check endpoint
 		'''
-		self.health_checks_url = '{0}/v1/health/state/any'.format(self.base_url)
+		self.health_checks_url = '{0}/health/state/any'.format(self.base_url)
 		'''
 		endpoint to query telemetry data. Available in v 0.9.1
 		'''
-		self.list_metrics_url = '{0}/v1/agent/metrics'.format(self.base_url)
+		self.list_metrics_url = '{0}/agent/metrics'.format(self.base_url)
 		'''
 		Ingest Url to send event
 		'''
@@ -687,7 +685,7 @@ class ConsulAgent(object):
 	def update_local_config(self):
 		conf = self.get_local_config()
 		self.config = conf['Config']
-		self.check_metrics_endpoint_available()
+		self.metrics_enabled = self.check_metrics_endpoint_available()
 
 	def check_metrics_endpoint_available(self):
 		'''
@@ -696,8 +694,8 @@ class ConsulAgent(object):
 		major, minor, revision = map(lambda x : int(x), self.config['Version'].split('.'))
 		
 		if (major == 0 and minor == 9 and revision >= 1) or major > 0:
-			self.metrics_enabled = True
-		else: self.metrics_enabled = False
+			return True
+		return False
 		
 	def get_local_config(self):
 		return self._send_request(self.local_config_url)
@@ -707,12 +705,6 @@ class ConsulAgent(object):
 
 	def get_nodes_in_dc(self):
 		return self._send_request(self.list_nodes_url)
-
-	# def get_services_in_dc(self):
-	# 	return self._send_request(self.list_services_url)
-
-	# def get_nodes_for_service(self, service):
-	# 	return self._send_request(self.list_nodes_for_service_url + '/{0}'.format(service))
 
 	def get_services_for_node(self, node):
 		return self._send_request(self.list_services_for_node_url + '/{0}'.format(node))
@@ -913,6 +905,90 @@ class ConsulAgent(object):
 		
 		return data
 
+class CollectdMock(object):
+    '''
+    Mock of the collectd module.
+
+    This is used when running the plugin locally.
+    All log messages are printed to stdout.
+    The Values() method will return an instance of CollectdValuesMock
+    '''
+    def __init__(self):
+        self.value_mock = CollectdValuesMock
+
+    def debug(self, msg):
+        print msg
+
+    def info(self, msg):
+        print msg
+
+    def notice(self, msg):
+        print msg
+
+    def warning(self, msg):
+        print msg
+
+    def error(self, msg):
+        print msg
+
+    def Values(self):
+        return (self.value_mock)()
+
+
+class CollectdValuesMock(object):
+    '''
+    Mock of the collectd Values class.
+
+    Instanes of this class are returned by CollectdMock, which is used to mock
+    collectd when running locally.
+    The dispatch() method will print the emitted record to stdout.
+    The code is copied from nginx_plus_collectd.py
+    '''
+    def dispatch(self):
+        if not getattr(self, 'host', None):
+            self.host = os.environ.get('COLLECTD_HOSTNAME', 'localhost')
+
+        identifier = '%s/%s' % (self.host, self.plugin)
+        if getattr(self, 'plugin_instance', None):
+            identifier += '-' + self.plugin_instance
+        identifier += '/' + self.type
+
+        if getattr(self, 'type_instance', None):
+            identifier += '-' + self.type_instance
+
+        print '[PUTVAL]', identifier, ':'.join(map(str, [int(self.time)] + self.values))
+
+    def __str__(self):
+        attrs = []
+        for name in dir(self):
+            if not name.startswith('_') and name != 'dispatch':
+                attrs.append("{}={}".format(name, getattr(self, name)))
+        return "<CollectdValues {}>".format(' '.join(attrs))
+
+class CollectdConfigMock(object):
+    '''
+    Mock of the collectd Config class.
+
+    This class is used to configure the plugin when running locally.
+    The children field is expected to be a list of CollectdConfigChildMock.
+    The code is copied from nginx_plus_collectd.py
+    '''
+    def __init__(self, children=None):
+        self.children = children or []
+
+class CollectdConfigChildMock(object):
+    '''
+    Mock of the collectd Conf child class.
+
+    This class is used to mock key:value pairs normally pulled from the plugin
+    configuration file.
+    The code is copied from nginx_plus_collectd.py
+    '''
+    def __init__(self, key, values):
+        self.key = key
+        self.values = values
+
+
 # Set up logging
 LOG_FILE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 LOG_FILE_MESSAGE_FORMAT = '[%(levelname)s] [consul-collectd] [%(asctime)s UTC]: %(message)s'
@@ -924,8 +1000,33 @@ LOGGER.setLevel(logging.INFO)
 LOGGER.propagate = False
 LOGGER.addHandler(log_handler)
 
-if __name__ != '__main__':
-	
+if __name__ == '__main__':
+    cli_api_host = sys.argv[1] if len(sys.argv) > 1 else '10.2.5.60'
+    cli_api_port = sys.argv[2] if len(sys.argv) > 2 else 8500
+
+    collectd = CollectdMock()
+    mock_config_api_host_child = CollectdConfigChildMock(API_HOST, [cli_api_host])
+    mock_config_api_port_child = CollectdConfigChildMock(API_PORT, [cli_api_port])
+    mock_config_api_protocol_child = CollectdConfigChildMock(API_PROTOCOL, ['http'])
+    mock_config_telemetry_server_child = CollectdConfigChildMock(TELEMETRY_SERVER, [False])
+    mock_config_dimension_child = CollectdConfigChildMock(DIMENSIONS, ['foo=bar'])
+
+    mock_config = CollectdConfigMock([mock_config_api_host_child,
+                                      mock_config_api_port_child,
+                                      mock_config_api_protocol_child,
+                                      mock_config_telemetry_server_child,
+                                      mock_config_dimension_child])
+
+    plugin_manager = ConsulPluginManager()
+    plugin_manager.configure_callback(mock_config)
+
+    while True:
+        plugin_manager.read_callback()
+        time.sleep(5)
+
+else:
+	import collectd
+
 	plugin_manager = ConsulPluginManager()
 	collectd.register_config(plugin_manager.configure_callback)
 	collectd.register_read(plugin_manager.read_callback)
