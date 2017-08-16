@@ -314,7 +314,7 @@ class ConsulPlugin(object):
 			elif node.key == DIMENSIONS or node.key == DIMENSION:
 				self.global_dimensions.update(self._dimensions_str_to_dict(node.values[0]))
 			elif node.key == SFX_TOKEN:
-				sfx_token = (node.values[0])
+				sfx_token = node.values[0]
 
 		self.enable_server = telemetry_server
 		if self.enable_server:
