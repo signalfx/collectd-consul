@@ -4,8 +4,9 @@ import time
 import sys, os
 import logging
 import threading
-import urllib2
+import urllib2, urllib_ssl_handler
 import json
+import collectd
 
 PLUGIN = 'consul'
 
@@ -17,6 +18,9 @@ TELEMETRY_HOST = 'TelemetryHost'
 TELEMETRY_PORT = 'TelemetryPort'
 ACL_TOKEN = 'AclToken'
 SFX_TOKEN = 'SignalFxToken'
+CA_CERTIFICATE = 'CACertificate'
+CLIENT_CERTIFICATE = 'ClientCertificate'
+CLIENT_KEY = 'ClientKey'
 DIMENSION = 'Dimension'
 DIMENSIONS = 'Dimensions'
 
@@ -295,6 +299,7 @@ class ConsulPlugin(object):
 		telemetry_port = 8125
 		acl_token = None
 		sfx_token = None
+		ssl_certs = {'ca_cert':None, 'client_cert':None, 'client_key':None}
 
 		for node in conf.children:
 			if node.key == API_HOST:
@@ -315,11 +320,17 @@ class ConsulPlugin(object):
 				self.global_dimensions.update(self._dimensions_str_to_dict(node.values[0]))
 			elif node.key == SFX_TOKEN:
 				sfx_token = node.values[0]
+			elif node.key == CA_CERTIFICATE:
+				ssl_certs['ca_cert'] = node.values[0]
+			elif node.key == CLIENT_CERTIFICATE:
+				ssl_certs['client_cert'] = node.values[0]
+			elif node.key == CLIENT_KEY:
+				ssl_certs['client_key'] = node.values[0]
 
 		self.enable_server = telemetry_server
 		if self.enable_server:
 			self.udp_server = UDPServer(telemetry_host, telemetry_port)
-		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token, sfx_token)
+		self.consul_agent = ConsulAgent(api_host, api_port, api_protocol, acl_token, sfx_token, ssl_certs)
 		self.global_dimensions.update(self.consul_agent.get_global_dimensions())
 		self.metric_sink = MetricSink()
 
@@ -512,7 +523,8 @@ class ConsulPlugin(object):
 		on termination, set the terminate event to indicte udp server thread to close socket
 		'''
 		LOGGER.info('Cleaning up for shutdown.')
-		self.udp_server.terminate.set()	
+		if self.enable_server:
+			self.udp_server.terminate.set()	
 
 	def _check_split(self, splitted_list):
 		'''
@@ -608,12 +620,13 @@ class ConsulAgent(object):
 	Helper class for interacting with consul's http api
 	'''
 
-	def __init__(self, api_host='localhost', api_port=8500, api_protocol='http', acl_token=None, sfx_token=None):
+	def __init__(self, api_host='localhost', api_port=8500, api_protocol='http', acl_token=None, sfx_token=None, ssl_certs=None):
 		
 		self.api_host = api_host
 		self.api_port = api_port
 		self.api_protocol = api_protocol
 		self.sfx_token = sfx_token
+		self.ssl_certs = ssl_certs
 
 		# If acl_token provided, add to header
 		self.acl_token = acl_token
@@ -870,8 +883,8 @@ class ConsulAgent(object):
 		except urllib2.HTTPError, e:
 			LOGGER.error('HTTPError - status code: {0}, received from {1}'.format(e.code, url))
 		except urllib2.URLError, e:
-			LOGGER.error('URLError - {0}'.format(e.reason))	
-
+			LOGGER.error('URLError - {0}'.format(e.reason))
+	
 	def _send_request(self, url):
 		'''
 		Performs a GET against the given url.
@@ -879,10 +892,15 @@ class ConsulAgent(object):
 		data = None
 
 		try:
-			req = urllib2.Request(url)
+
+			opener = urllib2.build_opener(urllib_ssl_handler.HTTPSHandler(\
+							ca_certs = self.ssl_certs['ca_cert'],\
+							cert_file = self.ssl_certs['client_cert'],\
+							key_file = self.ssl_certs['client_key']))
+			opener.addheaders = []
 			for k,v in self.headers.items():
-				req.add_header(k, v)
-			response = urllib2.urlopen(req)
+				opener.addheaders.append((k, v))
+			response = opener.open(url)
 			data = response.read()
 			data = json.loads(data)
 		except urllib2.HTTPError, e:
@@ -890,7 +908,7 @@ class ConsulAgent(object):
 		except urllib2.URLError, e:
 			LOGGER.error('URLError - {0}'.format(e.reason))
 		except ValueError, e:
-			LOGGER.error('Error parsing JSON for url {0}'.format(url))
+			LOGGER.error('Error - {0} parsing JSON for url {1}'.format(e, url))
 		
 		return data
 
@@ -977,7 +995,6 @@ class CollectdConfigChildMock(object):
         self.key = key
         self.values = values
 
-
 # Set up logging
 LOG_FILE_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 LOG_FILE_MESSAGE_FORMAT = '[%(levelname)s] [consul-collectd] [%(asctime)s UTC]: %(message)s'
@@ -1014,7 +1031,6 @@ if __name__ == '__main__':
         time.sleep(5)
 
 else:
-	import collectd
 
 	plugin_manager = ConsulPluginManager()
 	collectd.register_config(plugin_manager.configure_callback)
