@@ -4,7 +4,8 @@ import time
 import sys, os
 import logging
 import threading
-import requests
+import urllib2
+import json
 
 PLUGIN = 'consul'
 
@@ -506,26 +507,6 @@ class ConsulPlugin(object):
 
 		return metric_records
 
-	def _sanitize_telemety_data(self, timestamp, data):
-		
-		metric_records = []
-		for datapoint in data.splitlines():
-			#LOGGER.info('Datapoint from udp server {0}'.format(datapoint))
-			metric_split = datapoint.split(':')
-			if self._check_split(metric_split):
-				metric_name = metric_split.pop(0)
-				metric_split = metric_split[0].split('|')
-				if self._check_split(metric_split):
-					metric_type = self._get_metric_type(metric_split[1])
-					metric_value = float(metric_split[0]) if metric_type != 'counter' else int(float(metric_split[0]))
-					metric_records.append(MetricRecord(metric_name, metric_type , metric_value, self.global_dimensions, timestamp))
-				else:
-					LOGGER.warning('Malformed metric record from UDP packet. Increase max udp buffer size.')
-			else:
-				LOGGER.warning('Malformed metric record from UDP packet. Increase max udp buffer size.')
-		
-		return metric_records
-
 	def shutdown(self):
 		'''
 		on termination, set the terminate event to indicte udp server thread to close socket
@@ -636,7 +617,7 @@ class ConsulAgent(object):
 
 		# If acl_token provided, add to header
 		self.acl_token = acl_token
-		self.headers = {'X-Consul-Token': acl_token} if self.acl_token else None
+		self.headers = {'X-Consul-Token': acl_token} if self.acl_token else {}
 
 		self.base_url = '{0}://{1}:{2}/v1'.format(self.api_protocol, self.api_host, self.api_port)
 
@@ -689,7 +670,7 @@ class ConsulAgent(object):
 
 	def check_metrics_endpoint_available(self):
 		'''
-		/agent/metrics endpoint is available from version 0.9.2
+		/agent/metrics endpoint is available from version 0.9.1
 		'''
 		major, minor, revision = map(lambda x : int(x), self.config['Version'].split('.'))
 		
@@ -873,35 +854,43 @@ class ConsulAgent(object):
 		'''
 		send an event to signalfx on leader transition
 		'''
-		payload = [{
+		payload = json.dumps([{
 		'category': 'USER_DEFINED',
 		'eventType': 'consul leader changed',
 		'dimensions': dimensions,
 		'timestamp': int(time.time() * 1000)
-		}]
-		headers = {'Content-Type': 'application/json', 'X-SF-TOKEN': self.sfx_token}
+		}])
+		sfx_headers = {'Content-Type': 'application/json', 'X-SF-TOKEN': self.sfx_token}
 		
 		try:
-			response = requests.post(self._event_url, headers=headers, json=payload)
-			if response.status_code != requests.codes.ok:
-				LOGGER.error('Unexpected status code: {0}, received while sending event to SignalFx'.format(response.status_code))
-		except requests.exceptions.RequestException as e:
-			LOGGER.error('Failed request to SignalFx\'s event endpoint: {0}'.format(e))
+			req = urllib2.Request(self._event_url, payload)
+			for k,v in sfx_headers:
+				req.add_header(k, v)
+			response = urllib2.urlopen(req)
+		except urllib2.HTTPError, e:
+			LOGGER.error('HTTPError - status code: {0}, received from {1}'.format(e.code, url))
+		except urllib2.URLError, e:
+			LOGGER.error('URLError - {0}'.format(e.reason))	
 
-	def _send_request(self, url, parameters=None):
+	def _send_request(self, url):
 		'''
 		Performs a GET against the given url.
 		'''
 		data = None
 
 		try:
-			response = requests.get(url, headers=self.headers, params=parameters)
-			if response.status_code == requests.codes.ok:
-				data = response.json()
-			else:
-				LOGGER.error('Unexpected status code: {0}, received from {1}'.format(response.status_code, url))
-		except requests.exceptions.RequestException as e:
-			LOGGER.error('Failed request to {0}. {1}'.format(url, e))
+			req = urllib2.Request(url)
+			for k,v in self.headers.items():
+				req.add_header(k, v)
+			response = urllib2.urlopen(req)
+			data = response.read()
+			data = json.loads(data)
+		except urllib2.HTTPError, e:
+			LOGGER.error('HTTPError - status code: {0}, received from {1}'.format(e.code, url))
+		except urllib2.URLError, e:
+			LOGGER.error('URLError - {0}'.format(e.reason))
+		except ValueError, e:
+			LOGGER.error('Error parsing JSON for url {0}'.format(url))
 		
 		return data
 
