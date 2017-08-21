@@ -371,33 +371,33 @@ def configure_callback(conf):
     custom_dimensions = {}
 
     for node in conf.children:
-        if node.key == 'api_host':
+        if node.key == 'ApiHost':
             api_host = node.values[0]
-        elif node.key == 'api_port':
+        elif node.key == 'ApiPort':
             api_port = int(node.values[0])
-        elif node.key == 'api_protocol':
+        elif node.key == 'ApiProtocol':
             api_protocol = node.values[0]
-        elif node.key == 'telemetry_server':
+        elif node.key == 'TelemetryServer':
             telemetry_server = _str_to_bool(node.values[0])
-        elif node.key == 'telemetry_host':
+        elif node.key == 'TelemetryHost':
             telemetry_host = node.values[0]
-        elif node.key == 'telemetry_port':
+        elif node.key == 'TelemetryPort':
             telemetry_port = int(node.values[0])
-        elif node.key == 'acl_token':
+        elif node.key == 'AclToken':
             acl_token = node.values[0]
-        elif node.key == 'dimensions' or node.key == 'dimension':
+        elif node.key == 'Dimensions' or node.key == 'Dimension':
             custom_dimensions.update(_dimensions_str_to_dict(node.values[0]))
-        elif node.key == 'sfx_token':
+        elif node.key == 'SfxToken':
             sfx_token = node.values[0]
-        elif node.key == 'ca_certificate':
+        elif node.key == 'CaCertificate':
             ssl_certs['ca_cert'] = node.values[0]
-        elif node.key == 'client_certificate':
+        elif node.key == 'ClientCertificate':
             ssl_certs['client_cert'] = node.values[0]
-        elif node.key == 'client_key':
+        elif node.key == 'ClientKey':
             ssl_certs['client_key'] = node.values[0]
-        elif node.key == 'debug':
+        elif node.key == 'Debug':
             log_handler.enable_debug = _str_to_bool(node.values[0])
-        elif node.key == 'exclude_metric':
+        elif node.key == 'ExcludeMetric':
             exclude_metrics.append(node.values[0])
 
     # the values of the 'exclude_metric' parameter are used
