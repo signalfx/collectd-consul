@@ -618,7 +618,7 @@ class ConsulPlugin(object):
                                                metrics['min'],
                                                dimensions,
                                                time.time()))
-            metric_records.append(MetricRecord(dc_network_latency_avg.name,
+            metric_records.append(MetricRecord(dc_network_latency_max.name,
                                                dc_network_latency_max.type,
                                                metrics['max'],
                                                dimensions,
@@ -983,18 +983,17 @@ class ConsulAgent(object):
                 # found the instance dc, remove it from list
                 inter_dc_coords.pop(idx)
                 break
-        # Skip if only one dc
-        if agent_dc_coords:
-            for dc in inter_dc_coords:
-                latencies = []
-                for node_a in dc['Coordinates']:
-                    for node_b in agent_dc_coords:
-                        latencies.append(compute_rtt(node_a['Coord'],
-                                         node_b['Coord']))
-                avg = reduce(lambda x, y: x + y, latencies)/len(latencies)
-                dc_latency_map[dc['Datacenter']] = {'avg': avg,
-                                                    'min': min(latencies),
-                                                    'max': max(latencies)}
+
+        for dc in inter_dc_coords:
+            latencies = []
+            for node_a in dc['Coordinates']:
+                for node_b in agent_dc_coords:
+                    latencies.append(compute_rtt(node_a['Coord'],
+                                     node_b['Coord']))
+            avg = reduce(lambda x, y: x + y, latencies)/len(latencies)
+            dc_latency_map[dc['Datacenter']] = {'avg': avg,
+                                                'min': min(latencies),
+                                                'max': max(latencies)}
 
         return dc_latency_map
 
@@ -1087,7 +1086,7 @@ class ConsulAgent(object):
 
         try:
             req = urllib2.Request(self._event_url, payload)
-            for k, v in sfx_headers:
+            for k, v in sfx_headers.items():
                 req.add_header(k, v)
             response = urllib2.urlopen(req)
             LOGGER.debug('Sent leader change event to SignalFX with '
