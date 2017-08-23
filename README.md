@@ -46,8 +46,8 @@ LoadPlugin python
 
   Import consul_plugin
   <Module consul_plugin>
-  	ApiHost "server-1"
-  	ApiPort 8500
+    ApiHost "server-1"
+    ApiPort 8500
     ApiProtocol "http"
     AclToken "token"
     SfxToken "SignalFX_token"
