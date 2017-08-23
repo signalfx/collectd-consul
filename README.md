@@ -26,10 +26,10 @@ ApiPort |	Port to which the Consul HTTP/HTTPS server binds to on the instance to
 ApiProtocol | Possible values - *http* or *https*	| `http`
 AclToken | Consul ACL token. | None
 TelemetryServer	| Possible values - *true* or *false*<br>Set to *true* to enable collecting Consul's internal metrics via UDP from Consul's telemetry.<br>If set to *false* and Consul version is 0.9.1 and above, the metrics will be collected from API.<br>If set to *false* and Consul version is less than 0.9.1, Consul's internal metrics will not be available. | `false`
-TelemetryHost	| IP address or DNS to which consul is configured to send telemetry UDP packets. Relevant if TelemetryServer set to true. |	*localhost*
-TelemetryPort	| Port to which consul is configured to send telemetry UDP packets. Relevant if TelemetryServer set to true. |	*localhost*
+TelemetryHost	| IP address or DNS to which consul is configured to send telemetry UDP packets. Relevant if TelemetryServer set to true. |	`localhost`
+TelemetryPort	| Port to which consul is configured to send telemetry UDP packets. Relevant if TelemetryServer set to true. |	`8125`
 ExcludeMetric | Blocks metrics by prefix matching. This can be used to exclude metrics sent from `/agent/metrics` endpoint or from Consul's runtime telemetry send via UDP. | None
-SfxToken |	SignalFx org access token. If added to the config, an event is sent to SignalFx on leader transition and can be viewed on the Consul dashboard. |	`None`
+SfxToken |	SignalFx org access token. If added to the config, an event is sent to SignalFx on leader transition and can be viewed on the Consul dashboard. |	None
 Dimension | Add single custom global dimension to your metrics, formatted as "key=value" | None
 Dimensions | Add multiple global dimensions, formatted as "key1=value1,key2=value2,..." | None
 CACertificate | If Consul server has https enabled for the API, provide the path to the CA Certificate. | None
