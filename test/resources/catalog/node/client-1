@@ -1,0 +1,1 @@
+{"Node": {"Node": "client-1", "Datacenter": "dc1", "TaggedAddresses": {"wan": "10.2.6.17", "lan": "10.2.6.17"}, "ModifyIndex": 361231, "Meta": {}, "Address": "10.2.6.17", "CreateIndex": 303113, "ID": "6736c1e8-d695-e412-f897-c308d0a97209"}, "Services": {}}

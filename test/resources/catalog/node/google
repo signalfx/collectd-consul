@@ -1,0 +1,1 @@
+{"Node": {"Node": "google", "Datacenter": "", "TaggedAddresses": null, "ModifyIndex": 303113, "Meta": null, "Address": "www.google.com", "CreateIndex": 303113, "ID": ""}, "Services": {"search": {"Service": "search", "Tags": [], "ModifyIndex": 303113, "EnableTagOverride": false, "ID": "search", "Address": "", "CreateIndex": 303113, "Port": 80}}}
