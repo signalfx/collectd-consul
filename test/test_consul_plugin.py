@@ -8,7 +8,7 @@ import re
 sys.path.insert(0, os.path.dirname(__file__))
 # Mock out the collectd module
 sys.modules['collectd'] = Mock()
-import consul_collectd
+import consul_plugin
 
 
 class MockMetricSink(object):
@@ -21,7 +21,7 @@ class MockMetricSink(object):
 
 class TestConsulPlugin(unittest.TestCase):
 
-    @patch('consul_collectd.MetricSink')
+    @patch('consul_plugin.MetricSink')
     def setUp(self, mock_sink):
         self.maxDiff = None
         mock_consul_agent = self._build_mock_consul_agent()
@@ -42,9 +42,9 @@ class TestConsulPlugin(unittest.TestCase):
                             'custom_dimensions': custom_dimensions,
                             'debug': False
                             }
-        with patch('consul_collectd.ConsulAgent') as m_agent:
+        with patch('consul_plugin.ConsulAgent') as m_agent:
             m_agent.return_value = mock_consul_agent
-            self.plugin = consul_collectd.ConsulPlugin(self.plugin_conf)
+            self.plugin = consul_plugin.ConsulPlugin(self.plugin_conf)
             self.plugin.global_dimensions.update(
                             self.plugin.consul_agent.get_global_dimensions())
 
@@ -65,7 +65,7 @@ class TestConsulPlugin(unittest.TestCase):
 
         dimensions = {'consul_server_state': 'follower'}
         dimensions.update(self.plugin.global_dimensions)
-        expected_record = consul_collectd.MetricRecord(
+        expected_record = consul_plugin.MetricRecord(
             'consul.is_leader',
             'gauge',
             0,
@@ -78,7 +78,7 @@ class TestConsulPlugin(unittest.TestCase):
     def test_fetch_server_state_leader(self):
         expected_dim = {'consul_server_state': 'leader'}
         expected_dim.update(self.plugin.global_dimensions)
-        expected_metric = consul_collectd.MetricRecord('consul.is_leader',
+        expected_metric = consul_plugin.MetricRecord('consul.is_leader',
                                                        'gauge',
                                                        1,
                                                        expected_dim)
@@ -89,7 +89,7 @@ class TestConsulPlugin(unittest.TestCase):
 
     def test_fetch_peers(self):
         expected_dim = self.plugin.global_dimensions
-        expected_metric = consul_collectd.MetricRecord('consul.peers',
+        expected_metric = consul_plugin.MetricRecord('consul.peers',
                                                        'gauge',
                                                        3,
                                                        expected_dim)
@@ -145,19 +145,19 @@ class TestConsulPlugin(unittest.TestCase):
         dimensions = {'destination_dc': 'dc2'}
         dimensions.update(self.plugin.global_dimensions)
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.dc.latency.avg',
+            consul_plugin.MetricRecord('consul.network.dc.latency.avg',
                                          'gauge',
                                          0.41374872289293463,
                                          dimensions
                                          ))
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.dc.latency.min',
+            consul_plugin.MetricRecord('consul.network.dc.latency.min',
                                          'gauge',
                                          0.02,
                                          dimensions
                                          ))
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.dc.latency.max',
+            consul_plugin.MetricRecord('consul.network.dc.latency.max',
                                          'gauge',
                                          0.5702953069636298,
                                          dimensions
@@ -174,19 +174,19 @@ class TestConsulPlugin(unittest.TestCase):
         expected_records = []
         dimensions = self.plugin.global_dimensions
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.node.latency.avg',
+            consul_plugin.MetricRecord('consul.network.node.latency.avg',
                                          'gauge',
                                          0.47051138518296787,
                                          dimensions
                                          ))
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.node.latency.min',
+            consul_plugin.MetricRecord('consul.network.node.latency.min',
                                          'gauge',
                                          0.4154354798133847,
                                          dimensions
                                          ))
         expected_records.append(
-            consul_collectd.MetricRecord('consul.network.node.latency.max',
+            consul_plugin.MetricRecord('consul.network.node.latency.max',
                                          'gauge',
                                          0.5571355904035926,
                                          dimensions
@@ -202,32 +202,32 @@ class TestConsulPlugin(unittest.TestCase):
 
         expected_records = []
         dimensions = self.plugin.global_dimensions
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.services.critical',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.services.warning',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.services.passing',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.nodes.critical',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.nodes.warning',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.health.nodes.passing',
             'gauge',
             4,
@@ -244,97 +244,97 @@ class TestConsulPlugin(unittest.TestCase):
 
         expected_records = []
         dimensions = self.plugin.global_dimensions
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.fsm.coordinate.batch-update_mean',
             'gauge',
             0.05109499953687191,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.fsm.coordinate.batch-update_max',
             'gauge',
             0.05452900007367134,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.fsm.coordinate.batch-update_min',
             'gauge',
             0.04766099900007248,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.http.GET.v1.coordinate.nodes_mean',
             'gauge',
             0.7903540134429932,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.http.GET.v1.coordinate.nodes_max',
             'gauge',
             0.7903540134429932,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.consul.http.GET.v1.coordinate.nodes_min',
             'gauge',
             0.7903540134429932,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.gossip_mean',
             'gauge',
             0.007076957123354077,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.gossip_max',
             'gauge',
             0.015080999583005905,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.gossip_min',
             'gauge',
             0.0043750000186264515,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.raft.fsm.apply_mean',
             'gauge',
             0.10995149984955788,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.raft.fsm.apply_max',
             'gauge',
             0.11391499638557434,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.raft.fsm.apply_min',
             'gauge',
             0.10598800331354141,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.ip-10-2-2-84.ec2.internal.consul.session_ttl.active',
             'gauge',
             0,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.ip-10-2-2-84.ec2.internal.runtime.alloc_bytes',
             'gauge',
             4117728,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.ip-10-2-2-84.ec2.internal.runtime.free_count',
             'gauge',
             124627230,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.udp.received',
             'gauge',
             2174,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.udp.sent',
             'gauge',
             2174,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.tcp.sent',
             'gauge',
             1458,
             dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.tcp.accept',
             'gauge',
             1,
@@ -393,28 +393,28 @@ class TestConsulPlugin(unittest.TestCase):
         actual_records = self.plugin._fetch_telemetry_metrics()
 
         expected_records = []
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.udp.received',
             'gauge',
             181,
             self.plugin.global_dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.server-3.dc1.consul.runtime.alloc_bytes',
             'gauge',
             4815376.0,
             self.plugin.global_dimensions
             ))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.memberlist.gossip_min',
             'gauge',
             0.006504,
             self.plugin.global_dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.raft.rpc.appendEntries_max',
             'gauge',
             0.014557,
             self.plugin.global_dimensions))
-        expected_records.append(consul_collectd.MetricRecord(
+        expected_records.append(consul_plugin.MetricRecord(
             'consul.server-3.dc1.consul.runtime.sys_bytes',
             'gauge',
             13576440.0,
@@ -494,7 +494,7 @@ class TestConsulPlugin(unittest.TestCase):
         ssl_certs = {'ca_cert': None,
                      'client_cert': None,
                      'client_key': None}
-        agent = consul_collectd.ConsulAgent(api_host, api_port, api_protocol,
+        agent = consul_plugin.ConsulAgent(api_host, api_port, api_protocol,
                                             acl_token, sfx_token, ssl_certs)
         agent.config = self._sample_response('/agent/self')['Config']
 
@@ -510,28 +510,28 @@ class TestConsulPlugin(unittest.TestCase):
         metrics = self._sample_response('/agent/metrics')
         mock_agent.get_metrics = MagicMock(return_value=metrics)
 
-        with patch('consul_collectd.ConsulAgent.get_nodes_in_dc') as n_call:
-            with patch('consul_collectd.ConsulAgent.get_services_for_node') as s_call:
+        with patch('consul_plugin.ConsulAgent.get_nodes_in_dc') as n_call:
+            with patch('consul_plugin.ConsulAgent.get_services_for_node') as s_call:
                 n_call.return_value = self._sample_response('/catalog/nodes')
                 s_call.side_effect = self._mock_get_services_for_node
                 catalog_map = agent.get_catalog_map()
                 mock_agent.get_catalog_map = \
                     MagicMock(return_value=catalog_map)
 
-        with patch('consul_collectd.ConsulAgent.get_wan_coordinates') as mcall:
+        with patch('consul_plugin.ConsulAgent.get_wan_coordinates') as mcall:
             mcall.return_value = self._sample_response(
                 '/coordinate/datacenters')
             dc_latency_map = agent.calculate_inter_dc_latency()
             mock_agent.calculate_inter_dc_latency = \
                 MagicMock(return_value=dc_latency_map)
 
-        with patch('consul_collectd.ConsulAgent.get_lan_coordinates') as mcall:
+        with patch('consul_plugin.ConsulAgent.get_lan_coordinates') as mcall:
             mcall.return_value = self._sample_response('/coordinate/nodes')
             node_latency_map = agent.calculate_intra_dc_latency()
             mock_agent.calculate_intra_dc_latency = \
                 MagicMock(return_value=node_latency_map)
 
-        with patch('consul_collectd.ConsulAgent.get_health_checks') as mcall:
+        with patch('consul_plugin.ConsulAgent.get_health_checks') as mcall:
             mcall.return_value = self._sample_response('/health/state/any')
             h_map = agent.get_health_check_stats()
             mock_agent.get_health_check_stats = MagicMock(return_value=h_map)

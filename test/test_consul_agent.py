@@ -9,7 +9,7 @@ from urllib2 import URLError
 sys.path.insert(0, os.path.dirname(__file__))
 sys.modules['collectd'] = mock.Mock()
 
-from consul_collectd import ConsulAgent
+from consul_plugin import ConsulAgent
 
 
 class MockHTTPSHandler(object):
@@ -90,55 +90,55 @@ class ConsulAgentTest(unittest.TestCase):
 
         mock_urlopen.assert_called_with(mock_request.return_value)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_local_config(self, mock_send_request):
         expected_url = '{0}/agent/self'.format(self.base_url)
         self.agent.get_local_config()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_dc_leader(self, mock_send_request):
         expected_url = '{0}/status/leader'.format(self.base_url)
         self.agent.get_dc_leader()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_nodes_in_dc(self, mock_send_request):
         expected_url = '{0}/catalog/nodes'.format(self.base_url)
         self.agent.get_nodes_in_dc()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_services_for_node(self, mock_send_request):
         expected_url = '{0}/catalog/node/example_node'.format(self.base_url)
         self.agent.get_services_for_node('example_node')
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_peers_in_dc(self, mock_send_request):
         expected_url = '{0}/status/peers'.format(self.base_url)
         self.agent.get_peers_in_dc()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_wan_coordinates(self, mock_send_request):
         expected_url = '{0}/coordinate/datacenters'.format(self.base_url)
         self.agent.get_wan_coordinates()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_lan_coordinates(self, mock_send_request):
         expected_url = '{0}/coordinate/nodes'.format(self.base_url)
         self.agent.get_lan_coordinates()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_health_checks(self, mock_send_request):
         expected_url = '{0}/health/state/any'.format(self.base_url)
         self.agent.get_health_checks()
         mock_send_request.assert_called_with(expected_url)
 
-    @mock.patch('consul_collectd.ConsulAgent._send_request')
+    @mock.patch('consul_plugin.ConsulAgent._send_request')
     def test_get_metrics(self, mock_send_request):
         expected_url = '{0}/agent/metrics'.format(self.base_url)
         self.agent.get_metrics()
@@ -150,7 +150,7 @@ class ConsulAgentTest(unittest.TestCase):
         self.agent.config['Version'] = '0.9.0'
         self.assertFalse(self.agent.check_metrics_endpoint_available())
 
-    @mock.patch('consul_collectd.ConsulAgent.get_dc_leader',
+    @mock.patch('consul_plugin.ConsulAgent.get_dc_leader',
                 return_value=sample_response('/status/leader'))
     def test_is_leader(self, mock_call):
 
@@ -162,8 +162,8 @@ class ConsulAgentTest(unittest.TestCase):
     def _mock_get_services_for_node(self, node):
         return sample_response('/catalog/node/{0}'.format(node))
 
-    @mock.patch('consul_collectd.ConsulAgent.get_services_for_node')
-    @mock.patch('consul_collectd.ConsulAgent.get_nodes_in_dc',
+    @mock.patch('consul_plugin.ConsulAgent.get_services_for_node')
+    @mock.patch('consul_plugin.ConsulAgent.get_nodes_in_dc',
                 return_value=sample_response('/catalog/nodes'))
     def test_get_catalog_map(self, mock_get_nodes, mock_get_services):
         mock_get_services.side_effect = self._mock_get_services_for_node
@@ -177,7 +177,7 @@ class ConsulAgentTest(unittest.TestCase):
         actual_result = self.agent.get_catalog_map()
         self.assertDictEqual(actual_result, expected_result)
 
-    @mock.patch('consul_collectd.ConsulAgent.get_wan_coordinates',
+    @mock.patch('consul_plugin.ConsulAgent.get_wan_coordinates',
                 return_value=sample_response('/coordinate/datacenters'))
     def test_calculate_inter_dc_latency(self, mock_call):
         expected_dict_keys = {'dc2': {'avg': 0,
@@ -189,7 +189,7 @@ class ConsulAgentTest(unittest.TestCase):
         self.assertEqual(set(expected_dict_keys['dc2'].keys()),
                          set(actual_response['dc2'].keys()))
 
-    @mock.patch('consul_collectd.ConsulAgent.get_lan_coordinates',
+    @mock.patch('consul_plugin.ConsulAgent.get_lan_coordinates',
                 return_value=sample_response('/coordinate/nodes'))
     def test_calculate_intra_dc_latency(self, mock_call):
         expected_dict_keys = {'avg': 0,
@@ -199,7 +199,7 @@ class ConsulAgentTest(unittest.TestCase):
         self.assertEqual(set(expected_dict_keys.keys()),
                          set(actual_response.keys()))
 
-    @mock.patch('consul_collectd.ConsulAgent.get_health_checks',
+    @mock.patch('consul_plugin.ConsulAgent.get_health_checks',
                 return_value=sample_response('/health/state/any'))
     def test_get_health_check_stats(self, mock_call):
         expected_response = {'service': {},

@@ -9,7 +9,7 @@ import re
 sys.path.insert(0, os.path.dirname(__file__))
 
 sys.modules['collectd'] = mock.Mock()
-from consul_collectd import UDPServer
+from consul_plugin import UDPServer
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 with open(dir_path + '/sample_packet', 'r') as f:

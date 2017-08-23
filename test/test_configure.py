@@ -6,12 +6,12 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 sys.modules['collectd'] = mock.MagicMock()
-import consul_collectd
+import consul_plugin
 
 
 class TestConfiure(unittest.TestCase):
 
-    @mock.patch('consul_collectd.ConsulPlugin')
+    @mock.patch('consul_plugin.ConsulPlugin')
     def test_default_config(self, mock_plugin):
 
         mock_conf = mock.Mock()
@@ -30,13 +30,13 @@ class TestConfiure(unittest.TestCase):
                          'exclude_metrics_regex': None,
                          'custom_dimensions': {},
                          'debug': False}
-        consul_collectd.configure_callback(mock_conf)
+        consul_plugin.configure_callback(mock_conf)
         args, kwargs = mock_plugin.call_args
         for k, v in args[0].items():
             self.assertIn(k, expected_conf)
             self.assertEquals(v, expected_conf[k])
 
-    @mock.patch('consul_collectd.ConsulPlugin')
+    @mock.patch('consul_plugin.ConsulPlugin')
     def test_all_config(self, mock_plugin):
         mock_plugin.read = mock.MagicMock()
         mock_plugin.shutdown = mock.MagicMock()
@@ -143,7 +143,7 @@ class TestConfiure(unittest.TestCase):
                          'custom_dimensions': expected_custom_dimensions,
                          'debug': expected_debug}
 
-        consul_collectd.configure_callback(mock_conf)
+        consul_plugin.configure_callback(mock_conf)
         args, kwargs = mock_plugin.call_args
         for k, v in args[0].items():
             if k != 'exclude_metrics_regex':
@@ -152,13 +152,13 @@ class TestConfiure(unittest.TestCase):
             else:
                 self.assertEquals(v.pattern, expected_conf[k].pattern)
 
-        consul_collectd.collectd.register_read.assert_called_once()
-        consul_collectd.collectd.register_read.assert_called_with(
+        consul_plugin.collectd.register_read.assert_called_once()
+        consul_plugin.collectd.register_read.assert_called_with(
             mock_plugin().read, name='{}:{}'.format(expected_host,
                                                     expected_port))
 
-        consul_collectd.collectd.register_shutdown.assert_called_once()
-        consul_collectd.collectd.register_shutdown.assert_called_with(
+        consul_plugin.collectd.register_shutdown.assert_called_once()
+        consul_plugin.collectd.register_shutdown.assert_called_with(
             mock_plugin().shutdown)
 
 
