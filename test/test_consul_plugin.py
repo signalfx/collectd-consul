@@ -245,62 +245,62 @@ class TestConsulPlugin(unittest.TestCase):
         expected_records = []
         dimensions = self.plugin.global_dimensions
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.fsm.coordinate.batch-update_mean',
+            'consul.consul.fsm.coordinate.batch-update.avg',
             'gauge',
             0.05109499953687191,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.fsm.coordinate.batch-update_max',
+            'consul.consul.fsm.coordinate.batch-update.max',
             'gauge',
             0.05452900007367134,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.fsm.coordinate.batch-update_min',
+            'consul.consul.fsm.coordinate.batch-update.min',
             'gauge',
             0.04766099900007248,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.http.GET.v1.coordinate.nodes_mean',
+            'consul.consul.http.GET.v1.coordinate.nodes.avg',
             'gauge',
             0.7903540134429932,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.http.GET.v1.coordinate.nodes_max',
+            'consul.consul.http.GET.v1.coordinate.nodes.max',
             'gauge',
             0.7903540134429932,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.consul.http.GET.v1.coordinate.nodes_min',
+            'consul.consul.http.GET.v1.coordinate.nodes.min',
             'gauge',
             0.7903540134429932,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.memberlist.gossip_mean',
+            'consul.memberlist.gossip.avg',
             'gauge',
             0.007076957123354077,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.memberlist.gossip_max',
+            'consul.memberlist.gossip.max',
             'gauge',
             0.015080999583005905,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.memberlist.gossip_min',
+            'consul.memberlist.gossip.min',
             'gauge',
             0.0043750000186264515,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.raft.fsm.apply_mean',
+            'consul.raft.fsm.apply.avg',
             'gauge',
             0.10995149984955788,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.raft.fsm.apply_max',
+            'consul.raft.fsm.apply.max',
             'gauge',
             0.11391499638557434,
             dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.raft.fsm.apply_min',
+            'consul.raft.fsm.apply.min',
             'gauge',
             0.10598800331354141,
             dimensions))
@@ -356,23 +356,23 @@ class TestConsulPlugin(unittest.TestCase):
         actual_records = self.plugin._fetch_telemetry_metrics()
 
         not_expected_metrics = set([
-            'consul.memberlist.gossip_mean',
-            'consul.memberlist.gossip_min',
-            'consul.memberlist.gossip_max',
+            'consul.memberlist.gossip.avg',
+            'consul.memberlist.gossip.min',
+            'consul.memberlist.gossip.max',
             'consul.ip-10-2-2-84.ec2.internal.consul.session_ttl.active',
             'consul.ip-10-2-2-84.ec2.internal.runtime.alloc_bytes',
             'consul.ip-10-2-2-84.ec2.internal.runtime.free_count'])
 
         expected_metrics = set([
-            'consul.consul.fsm.coordinate.batch-update_mean',
-            'consul.consul.fsm.coordinate.batch-update_min',
-            'consul.consul.fsm.coordinate.batch-update_max',
-            'consul.consul.http.GET.v1.coordinate.nodes_mean',
-            'consul.consul.http.GET.v1.coordinate.nodes_min',
-            'consul.consul.http.GET.v1.coordinate.nodes_max',
-            'consul.raft.fsm.apply_mean',
-            'consul.raft.fsm.apply_min',
-            'consul.raft.fsm.apply_max',
+            'consul.consul.fsm.coordinate.batch-update.avg',
+            'consul.consul.fsm.coordinate.batch-update.min',
+            'consul.consul.fsm.coordinate.batch-update.max',
+            'consul.consul.http.GET.v1.coordinate.nodes.avg',
+            'consul.consul.http.GET.v1.coordinate.nodes.min',
+            'consul.consul.http.GET.v1.coordinate.nodes.max',
+            'consul.raft.fsm.apply.avg',
+            'consul.raft.fsm.apply.min',
+            'consul.raft.fsm.apply.max',
             'consul.memberlist.udp.received',
             'consul.memberlist.udp.sent',
             'consul.memberlist.tcp.sent',
@@ -405,12 +405,12 @@ class TestConsulPlugin(unittest.TestCase):
             self.plugin.global_dimensions
             ))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.memberlist.gossip_min',
+            'consul.memberlist.gossip.min',
             'gauge',
             0.006504,
             self.plugin.global_dimensions))
         expected_records.append(consul_plugin.MetricRecord(
-            'consul.raft.rpc.appendEntries_max',
+            'consul.raft.rpc.appendEntries.max',
             'gauge',
             0.014557,
             self.plugin.global_dimensions))
@@ -554,11 +554,11 @@ class TestConsulPlugin(unittest.TestCase):
                              {'timestamp': 1503336692.96813,
                               'type': 'gauge',
                               'value': 4815376.0},
-                             'consul.memberlist.gossip_min':
+                             'consul.memberlist.gossip.min':
                              {'timestamp': 1503336692.968156,
                               'type': 'gauge',
                               'value': 0.006504},
-                             'consul.raft.rpc.appendEntries_max':
+                             'consul.raft.rpc.appendEntries.max':
                              {'timestamp': 1503336692.968211,
                               'type': 'gauge',
                               'value': 0.014557},

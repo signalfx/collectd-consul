@@ -56,27 +56,27 @@ class TestUDPServer(unittest.TestCase):
                           {'value': 13576440.0,
                            'type': 'gauge'
                            },
-                          'consul.memberlist.gossip_mean':
+                          'consul.memberlist.gossip.avg':
                           {'value': 0.006504,
                            'type': 'gauge'
                            },
-                          'consul.memberlist.gossip_min':
+                          'consul.memberlist.gossip.min':
                           {'value': 0.006504,
                            'type': 'gauge'
                            },
-                          'consul.memberlist.gossip_max':
+                          'consul.memberlist.gossip.max':
                           {'value': 0.006504,
                            'type': 'gauge'
                            },
-                          'consul.raft.rpc.appendEntries_mean':
+                          'consul.raft.rpc.appendEntries.avg':
                           {'value': rpc_mean,
                            'type': 'gauge'
                            },
-                          'consul.raft.rpc.appendEntries_min':
+                          'consul.raft.rpc.appendEntries.min':
                           {'value': min(rpc_list),
                            'type': 'gauge'
                            },
-                          'consul.raft.rpc.appendEntries_max':
+                          'consul.raft.rpc.appendEntries.max':
                           {'value': max(rpc_list),
                            'type': 'gauge'
                            },
@@ -119,13 +119,13 @@ class TestUDPServer(unittest.TestCase):
                           'consul.server-3.dc1.consul.runtime.sys_bytes':
                           {'value': 13576440.0,
                            'type': 'gauge'},
-                          'consul.raft.rpc.appendEntries_mean':
+                          'consul.raft.rpc.appendEntries.avg':
                           {'value': rpc_mean,
                            'type': 'gauge'},
-                          'consul.raft.rpc.appendEntries_min':
+                          'consul.raft.rpc.appendEntries.min':
                           {'value': min(rpc_list),
                            'type': 'gauge'},
-                          'consul.raft.rpc.appendEntries_max':
+                          'consul.raft.rpc.appendEntries.max':
                           {'value': max(rpc_list),
                            'type': 'gauge'}
                           }

@@ -297,15 +297,15 @@ class UDPServer(threading.Thread):
                 self.timers[metric_name].append(float(metric_split[0]))
                 val = reduce(lambda x, y: x + y, self.timers[metric_name])
                 val = val/len(self.timers[metric_name])
-                self.metrics['{0}_mean'.format(metric_name)] = {
+                self.metrics['{0}.avg'.format(metric_name)] = {
                                                     'type': metric_type,
                                                     'value': val,
                                                     'timestamp': time.time()}
-                self.metrics['{0}_min'.format(metric_name)] = {
+                self.metrics['{0}.min'.format(metric_name)] = {
                                         'type': metric_type,
                                         'value': min(self.timers[metric_name]),
                                         'timestamp': time.time()}
-                self.metrics['{0}_max'.format(metric_name)] = {
+                self.metrics['{0}.max'.format(metric_name)] = {
                                         'type': metric_type,
                                         'value': max(self.timers[metric_name]),
                                         'timestamp': time.time()}
@@ -758,11 +758,11 @@ class ConsulPlugin(object):
                                                      self.global_dimensions,
                                                      time.time()))
                     elif metric_type == 'Samples':
-                        metric_mean = '{0}_mean'.format(metric['Name'])
-                        metric_max = '{0}_max'.format(metric['Name'])
-                        metric_min = '{0}_min'.format(metric['Name'])
+                        metric_avg = '{0}.avg'.format(metric['Name'])
+                        metric_max = '{0}.max'.format(metric['Name'])
+                        metric_min = '{0}.min'.format(metric['Name'])
                         metric_records.append(
-                                        MetricRecord(metric_mean,
+                                        MetricRecord(metric_avg,
                                                      'gauge',
                                                      metric['Mean'],
                                                      self.global_dimensions,
