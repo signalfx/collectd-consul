@@ -201,7 +201,11 @@ class UDPServer(threading.Thread):
     Creates a thread which receives packets from Consul agent on a UDP socket.
     The timeout interval ensures that the thread does not block on receive call
     '''
-    def __init__(self, host, port, exclude_regex=None,
+    def __init__(self, host, port,
+                 default_regex,
+                 enhanced_metrics=False,
+                 include_regex=None,
+                 exclude_regex=None,
                  max_buffer_size=1432, timeout_interval=20):
 
         threading.Thread.__init__(self)
@@ -209,6 +213,9 @@ class UDPServer(threading.Thread):
         self._port = port
         self._bufsize = max_buffer_size
         self._timeout = timeout_interval
+        self.default_regex = default_regex
+        self.include_regex = include_regex
+        self.enhanced_metrics = enhanced_metrics
         self.exclude_regex = exclude_regex
         self.lock = threading.Lock()
         self.stats = {}
@@ -238,15 +245,13 @@ class UDPServer(threading.Thread):
                                 .format(self._host, self._port))
                     continue
 
-                if self.read_complete.isSet():
-                    self.metrics.clear()
-                    self.timers.clear()
-                    self.read_complete.clear()
-
-                self.sanitize_data(data)
-
-                # Update the shared data structure once lock is acquired
                 with self.lock:
+                    if self.read_complete.isSet():
+                        self.metrics.clear()
+                        self.timers.clear()
+                        self.read_complete.clear()
+
+                    self.sanitize_data(data)
                     self.stats.update(self.metrics)
 
             # Terminate event is set. Close the socket and exit.
@@ -268,14 +273,13 @@ class UDPServer(threading.Thread):
                                'Increase max udp buffer size.')
                 continue
             metric_name = metric_split.pop(0)
-            if self.exclude_regex is not None and \
-               self.exclude_regex.match(metric_name) is not None:
-                continue
             metric_split = metric_split[0].split('|')
             if not (len(metric_split) == 2 and '' not in metric_split):
                 # In case the packet was truncated while receiving.
                 LOGGER.warning('Malformed metric record from UDP packet. '
                                'Increase max udp buffer size.')
+                continue
+            if not self._include_metric(metric_name):
                 continue
             metric_type = 'gauge'
             if metric_split[1] == 'c' and metric_name in self.metrics:
@@ -309,6 +313,19 @@ class UDPServer(threading.Thread):
                                         'type': metric_type,
                                         'value': max(self.timers[metric_name]),
                                         'timestamp': time.time()}
+
+    def _include_metric(self, metric_name):
+        if self.default_regex.search(metric_name) is not None:
+            return True
+        elif self.enhanced_metrics:
+            if self.exclude_regex is None or \
+              (self.exclude_regex is not None and
+               self.exclude_regex.match(metric_name) is None):
+                return True
+        elif (self.include_regex is not None and
+              self.include_regex.match(metric_name) is not None):
+            return True
+        return False
 
 
 consul_server_state = MetricDefinition('consul.is_leader', 'gauge')
@@ -351,6 +368,28 @@ health_nodes_warning = MetricDefinition('consul.health.nodes.warning',
 health_nodes_critical = MetricDefinition('consul.health.nodes.critical',
                                          'gauge')
 
+default_telemetry = ['consul.raft.state.leader',
+                     'consul.raft.state.candidate',
+                     'consul.raft.leader.lastContact',
+                     'consul.raft.leader.dispatchLog',
+                     'consul.raft.commitTime',
+                     'consul.raft.apply',
+                     'consul.raft.replication.appendEntries.rpc',
+                     'consul.consul.leader.reconcile',
+                     'consul.serf.events',
+                     'consul.serf.queue.Event',
+                     'consul.serf.queue.Query',
+                     'consul.serf.member.join',
+                     'consul.serf.member.left',
+                     'runtime.heap_objects',
+                     'runtime.alloc_bytes',
+                     'runtime.num_goroutines',
+                     'consul.dns.domain_query',
+                     'consul.dns.ptr_query',
+                     'consul.dns.stale_queries',
+                     'consul.serf.member.flap',
+                     'consul.memberlist.msg.suspect']
+
 
 def configure_callback(conf):
     '''
@@ -367,8 +406,13 @@ def configure_callback(conf):
     acl_token = None
     sfx_token = None
     ssl_certs = {'ca_cert': None, 'client_cert': None, 'client_key': None}
+    enhanced_metrics = False
     exclude_metrics = []
+    include_metrics = []
     custom_dimensions = {}
+    default_telemetry_regex = re.compile('|'.join('(?:{0})'
+                                         .format(re.escape(x))
+                                         for x in default_telemetry))
 
     for node in conf.children:
         if node.key == 'ApiHost':
@@ -397,8 +441,12 @@ def configure_callback(conf):
             ssl_certs['client_key'] = node.values[0]
         elif node.key == 'Debug':
             log_handler.enable_debug = _str_to_bool(node.values[0])
+        elif node.key == 'EnhancedMetrics':
+            enhanced_metrics = _str_to_bool(node.values[0])
         elif node.key == 'ExcludeMetric':
-            exclude_metrics.append(node.values[0])
+            exclude_metrics.append(re.escape(node.values[0]))
+        elif node.key == 'IncludeMetric':
+            include_metrics.append(re.escape(node.values[0]))
 
     # the values of the 'exclude_metric' parameter are used
     # to block metrics using prefix matching - e.g. for the config
@@ -414,6 +462,12 @@ def configure_callback(conf):
     else:
         exclude_metrics_regex = None
 
+    if include_metrics:
+        include_metrics_regex = re.compile('|'.join('(?:{0})'.format(x)
+                                           for x in include_metrics))
+    else:
+        include_metrics_regex = None
+
     plugin_conf = {'api_host': api_host,
                    'api_port': api_port,
                    'api_protocol': api_protocol,
@@ -423,7 +477,10 @@ def configure_callback(conf):
                    'acl_token': acl_token,
                    'sfx_token': sfx_token,
                    'ssl_certs': ssl_certs,
+                   'default_telemetry_regex': default_telemetry_regex,
+                   'enhanced_metrics': enhanced_metrics,
                    'exclude_metrics_regex': exclude_metrics_regex,
+                   'include_metrics_regex': include_metrics_regex,
                    'custom_dimensions': custom_dimensions,
                    'debug': log_handler.enable_debug
                    }
@@ -432,6 +489,8 @@ def configure_callback(conf):
     for k, v in plugin_conf.items():
         if k == 'exclude_metrics_regex':
             k, v = 'exclude_metrics', exclude_metrics
+        elif k == 'include_metrics_regex':
+            k, v = 'include_metrics', include_metrics
         LOGGER.debug('{0} : {1}'.format(k, v))
 
     consul_plugin = ConsulPlugin(plugin_conf)
@@ -450,10 +509,16 @@ class ConsulPlugin(object):
         self.global_dimensions = {}
         self.enable_server = plugin_conf['telemetry_server']
         self.global_dimensions.update(plugin_conf['custom_dimensions'])
+        self.default_regex = plugin_conf['default_telemetry_regex']
+        self.enhanced_metrics = plugin_conf['enhanced_metrics']
         self.exclude_regex = plugin_conf['exclude_metrics_regex']
+        self.include_regex = plugin_conf['include_metrics_regex']
         if self.enable_server:
             self.udp_server = UDPServer(plugin_conf['telemetry_host'],
                                         plugin_conf['telemetry_port'],
+                                        plugin_conf['default_telemetry_regex'],
+                                        plugin_conf['enhanced_metrics'],
+                                        plugin_conf['include_metrics_regex'],
                                         plugin_conf['exclude_metrics_regex'])
         else:
             self.udp_server = None
@@ -471,6 +536,12 @@ class ConsulPlugin(object):
         '''
         LOGGER.debug('Starting metrics collection in read callback.')
         self.consul_agent.update_local_config()
+
+        # Return from read callback if config for the agent is not found
+        if self.consul_agent.config is None:
+            LOGGER.warning('Did not find config of consul at /agent/self.')
+            return
+
         self.global_dimensions.update(
                         self.consul_agent.get_global_dimensions())
         metric_records = []
@@ -727,7 +798,7 @@ class ConsulPlugin(object):
                     # delete the metric so we don't read stale metric again,
                     # in case the metric value is not updated between two reads
                     del self.udp_server.stats[metric_name]
-            self.udp_server.read_complete.set()
+                self.udp_server.read_complete.set()
 
         elif self.consul_agent.metrics_enabled:
             # get metrics and sanitize
@@ -739,48 +810,62 @@ class ConsulPlugin(object):
                 if metric_type == 'Timestamp':
                     continue
                 for metric in metrics_list:
-                    # ignore metric if it contains any excluded prefixes
-                    if self.exclude_regex is not None and \
-                       self.exclude_regex.match(metric['Name']) is not None:
-                        continue
-                    if metric_type == 'Gauges':
-                        metric_records.append(
-                                        MetricRecord(metric['Name'],
-                                                     'gauge',
-                                                     metric['Value'],
-                                                     self.global_dimensions,
-                                                     time.time()))
-                    elif metric_type == 'Counters':
-                        metric_records.append(
-                                        MetricRecord(metric['Name'],
-                                                     'gauge',
-                                                     metric['Sum'],
-                                                     self.global_dimensions,
-                                                     time.time()))
-                    elif metric_type == 'Samples':
-                        metric_avg = '{0}.avg'.format(metric['Name'])
-                        metric_max = '{0}.max'.format(metric['Name'])
-                        metric_min = '{0}.min'.format(metric['Name'])
-                        metric_records.append(
-                                        MetricRecord(metric_avg,
-                                                     'gauge',
-                                                     metric['Mean'],
-                                                     self.global_dimensions,
-                                                     time.time()))
-                        metric_records.append(
-                                        MetricRecord(metric_max,
-                                                     'gauge',
-                                                     metric['Max'],
-                                                     self.global_dimensions,
-                                                     time.time()))
-                        metric_records.append(
-                                        MetricRecord(metric_min,
-                                                     'gauge',
-                                                     metric['Min'],
-                                                     self.global_dimensions,
-                                                     time.time()))
+                    if self._include_metric(metric['Name']):
+                        metric_records.extend(
+                              self._sanitize_telemetry(metric_type, metric))
 
         return metric_records
+
+    def _include_metric(self, metric_name):
+        if self.default_regex.search(metric_name) is not None:
+            return True
+        elif self.enhanced_metrics:
+            if self.exclude_regex is None or \
+              (self.exclude_regex is not None and
+               self.exclude_regex.match(metric_name) is None):
+                return True
+        elif (self.include_regex is not None and
+              self.include_regex.match(metric_name) is not None):
+            return True
+        return False
+
+    def _sanitize_telemetry(self, metric_type, metric):
+        if metric_type == 'Gauges':
+            return [MetricRecord(metric['Name'],
+                                 'gauge',
+                                 metric['Value'],
+                                 self.global_dimensions,
+                                 time.time())]
+        elif metric_type == 'Counters':
+            return [MetricRecord(metric['Name'],
+                                 'gauge',
+                                 metric['Sum'],
+                                 self.global_dimensions,
+                                 time.time())]
+        elif metric_type == 'Samples':
+            metric_records = []
+            metric_avg = '{0}.avg'.format(metric['Name'])
+            metric_max = '{0}.max'.format(metric['Name'])
+            metric_min = '{0}.min'.format(metric['Name'])
+            metric_records.append(
+                            MetricRecord(metric_avg,
+                                         'gauge',
+                                         metric['Mean'],
+                                         self.global_dimensions,
+                                         time.time()))
+            metric_records.append(
+                            MetricRecord(metric_max,
+                                         'gauge',
+                                         metric['Max'],
+                                         self.global_dimensions,
+                                         time.time()))
+            metric_records.append(
+                            MetricRecord(metric_min,
+                                         'gauge',
+                                         metric['Min'],
+                                         self.global_dimensions,
+                                         time.time()))
+            return metric_records
 
     def shutdown(self):
         '''
@@ -838,8 +923,7 @@ class ConsulAgent(object):
         self.list_metrics_url = '{0}/agent/metrics'.format(self.base_url)
 
         # Ingest Url to send event
-        self._event_url = 'http://lab-ingest.corp.signalfuse.com:8080/v2/event'
-        # self._event_url = 'https://ingest.signalfx.com/v2/event'
+        self._event_url = 'https://ingest.signalfx.com/v2/event'
 
         self.config = {}
         self.metrics_enabled = False
@@ -848,6 +932,7 @@ class ConsulAgent(object):
     def update_local_config(self):
         conf = self.get_local_config()
         if not conf:
+            self.config = None
             return
         self.config = conf['Config']
         self.metrics_enabled = self.check_metrics_endpoint_available()
@@ -898,26 +983,25 @@ class ConsulAgent(object):
         '''
         curr_leader = self.get_dc_leader()
 
-        if self.config:
-            agent_addr = '{0}:{1}'.format(self.config['AdvertiseAddr'],
-                                          self.config['Ports']['Server'])
-            if curr_leader == agent_addr:
-                if self.last_leader is not None and \
-                   self.last_leader != curr_leader and \
-                   self.sfx_token:
+        agent_addr = '{0}:{1}'.format(self.config['AdvertiseAddr'],
+                                      self.config['Ports']['Server'])
+        if curr_leader == agent_addr:
+            if self.last_leader is not None and \
+               self.last_leader != curr_leader and \
+               self.sfx_token:
 
-                    LOGGER.debug('Change in leader.')
-                    dimensions = {'old_leader': self.last_leader.split(':')[0],
-                                  'new_leader': curr_leader.split(':')[0],
-                                  'datacenter': self.config['Datacenter']}
-                    self._send_leader_change_event(dimensions)
-                    self.last_leader = curr_leader
+                LOGGER.debug('Change in leader.')
+                dimensions = {'old_leader': self.last_leader.split(':')[0],
+                              'new_leader': curr_leader.split(':')[0],
+                              'datacenter': self.config['Datacenter']}
+                self._send_leader_change_event(dimensions)
+                self.last_leader = curr_leader
 
-                return True
+            return True
 
-        self.last_leader = curr_leader
-
-        if not curr_leader:
+        if curr_leader:
+            self.last_leader = curr_leader
+        else:
             LOGGER.warn('Did not find any consul cluster leader.')
 
         return False
@@ -1012,14 +1096,14 @@ class ConsulAgent(object):
 
         for idx, node in enumerate(intra_dc_coords):
 
-            if node['Node'] == self.config['NodeName'] or \
-               node['Node'] == self.config['NodeID']:
+            if node['Node'] == self.config['NodeName']:
                 agent_node_coords = node['Coord']
                 # found the instance, remove it from list
                 intra_dc_coords.pop(idx)
                 break
-        # skip if single node in dc
-        if len(intra_dc_coords):
+        # skip if did not find instance node's coordinates and
+        # if single node in dc
+        if agent_node_coords and len(intra_dc_coords):
             latencies = []
             for node in intra_dc_coords:
                 latencies.append(compute_rtt(node['Coord'], agent_node_coords))
@@ -1060,12 +1144,11 @@ class ConsulAgent(object):
         datacenter the consul node belongs to, node name, and node id.
         '''
         dimensions = {}
-        if not self.config:
+        if self.config is None:
             return dimensions
 
         dimensions['datacenter'] = self.config['Datacenter']
-        dimensions['consul_node'] = self.config['NodeName'] or \
-            self.config['NodeID']
+        dimensions['consul_node'] = self.config['NodeName']
         if self.config['Server']:
             dimensions['consul_mode'] = 'server'
         else:

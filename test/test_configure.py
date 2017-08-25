@@ -16,6 +16,9 @@ class TestConfiure(unittest.TestCase):
 
         mock_conf = mock.Mock()
         mock_conf.children = []
+        default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                             for x in 
+                                             consul_plugin.default_telemetry))
 
         expected_conf = {'api_host': 'localhost',
                          'api_port': 8500,
@@ -27,7 +30,10 @@ class TestConfiure(unittest.TestCase):
                          'sfx_token': None,
                          'ssl_certs': {'ca_cert': None, 'client_cert': None,
                                        'client_key': None},
+                         'default_telemetry_regex': default_telemetry_regex,
+                         'enhanced_metrics': False,
                          'exclude_metrics_regex': None,
+                         'include_metrics_regex': None,
                          'custom_dimensions': {},
                          'debug': False}
         consul_plugin.configure_callback(mock_conf)
@@ -89,6 +95,10 @@ class TestConfiure(unittest.TestCase):
                               'client_cert': expected_client_cert,
                               'client_key': expected_client_key}
 
+        expected_enhanced_metrics = True
+        mock_enchanced_metrics = _build_mock_config_child('EnhancedMetrics',
+                                                          'true')
+
         expected_exclude_metric_1 = 'consul.http'
         mock_exclude_metric_1 = _build_mock_config_child(
             'ExcludeMetric',
@@ -99,7 +109,29 @@ class TestConfiure(unittest.TestCase):
             'ExcludeMetric',
             expected_exclude_metric_2)
 
-        expected_regex = re.compile('(?:consul.http)|(?:consul.rpc)')
+        expected_include_metric_1 = 'consul.serf'
+        mock_include_metric_1 = _build_mock_config_child(
+            'IncludeMetric',
+            expected_include_metric_1)
+
+        expected_include_metric_2 = 'consul.memberlist'
+        mock_include_metric_2 = _build_mock_config_child(
+            'IncludeMetric',
+            expected_include_metric_2)
+
+        expected_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                              for x in 
+                                              consul_plugin.default_telemetry))
+        include = ['consul.serf',
+                   'consul.memberlist']
+        exclude = ['consul.http',
+                   'consul.rpc']
+
+        expected_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                    for x in exclude))
+
+        expected_include_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                            for x in include))
 
         expected_dimension = 'foo=bar'
         mock_dimension = _build_mock_config_child('Dimension',
@@ -124,8 +156,11 @@ class TestConfiure(unittest.TestCase):
                               mock_ca_cert,
                               mock_client_cert,
                               mock_client_key,
+                              mock_enchanced_metrics,
                               mock_exclude_metric_1,
                               mock_exclude_metric_2,
+                              mock_include_metric_1,
+                              mock_include_metric_2,
                               mock_dimension,
                               mock_dimensions,
                               mock_debug]
@@ -139,14 +174,19 @@ class TestConfiure(unittest.TestCase):
                          'acl_token': expected_acl_token,
                          'sfx_token': expected_sfx_token,
                          'ssl_certs': expected_ssl_certs,
+                         'default_telemetry_regex': expected_telemetry_regex,
+                         'enhanced_metrics': expected_enhanced_metrics,
                          'exclude_metrics_regex': expected_regex,
+                         'include_metrics_regex': expected_include_regex,
                          'custom_dimensions': expected_custom_dimensions,
                          'debug': expected_debug}
 
         consul_plugin.configure_callback(mock_conf)
         args, kwargs = mock_plugin.call_args
         for k, v in args[0].items():
-            if k != 'exclude_metrics_regex':
+            if k not in ['exclude_metrics_regex',
+                         'include_metrics_regex',
+                         'default_telemetry_regex']:
                 self.assertIn(k, expected_conf)
                 self.assertEquals(v, expected_conf[k])
             else:
