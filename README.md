@@ -87,4 +87,4 @@ LoadPlugin python
 **Example usage of the `ExcludeMetric` and `IncludeMetric` config option**
 
 With the above example configuration values, for the *server-1* instance all metrics starting with the prefix **consul.consul.http** will be blocked.
-So metrics *consul.consul.http.GET.v1.agent.self* and *consul.consul.http.POST.v1.kv.KEY* will be blocked. Similarly, for the *server-2* instance al metrics starting with the prefix **consul.fsm** will be allowed.
+So metrics *consul.consul.http.GET.v1.agent.self* and *consul.consul.http.POST.v1.kv.KEY* will be blocked. Similarly, for the *server-2* instance all metrics starting with the prefix **consul.fsm** will be allowed.

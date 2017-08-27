@@ -245,14 +245,15 @@ class UDPServer(threading.Thread):
                                 .format(self._host, self._port))
                     continue
 
+                self.sanitize_data(data)
+
                 with self.lock:
                     if self.read_complete.isSet():
                         self.metrics.clear()
                         self.timers.clear()
                         self.read_complete.clear()
-
-                    self.sanitize_data(data)
-                    self.stats.update(self.metrics)
+                    else:
+                        self.stats.update(self.metrics)
 
             # Terminate event is set. Close the socket and exit.
             self.socket.close()
