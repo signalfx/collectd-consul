@@ -48,6 +48,7 @@ CACertificate | If Consul server has https enabled for the API, provide the path
 ClientCertificate | If client-side authentication is enabled, provide the path to the certificate file. | None
 ClientKey | If client-side authentication is enabled, provide the path to the key file. | None
 Debug | Possible values - *true* or *false*<br> | `false`
+
 Note that multiple Consul instances can be configured in the same file. If using Consul version 0.9.1 and above, it is recommended to not enable the TelemetryServer and let the plugin collect metrics from API for better performance.
 
 ```
