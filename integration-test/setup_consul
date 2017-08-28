@@ -1,0 +1,31 @@
+#!/bin/bash
+
+wait_for_leader () {
+  while :
+  do
+    response=$(curl --write-out \\n%{http_code} --silent --output - http://server-1:8500/v1/status/leader)
+    IFS=$'\n' y=(${response})
+    if [ $y[1]="200" ] && ! [ -z "$y[0]" ]
+    then
+      return
+    fi
+    sleep 0.2
+  done
+}
+
+wait_for () {
+    host=$1
+    while ! nc -z $host 8500
+    do
+      sleep 0.2
+    done
+}
+
+for host in server-1 server-2 server-3 client
+do
+  wait_for $host
+done
+
+wait_for_leader
+
+exec /.docker/run.sh

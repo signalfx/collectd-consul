@@ -1,0 +1,12 @@
+consul.memberlist.udp.received:27.000000|c
+consul.memberlist.udp.sent:154.000000|c
+consul.server-3.dc1.consul.runtime.num_goroutines:66.000000|g
+consul.server-3.dc1.consul.runtime.alloc_bytes:4815376.000000|g
+consul.runtime.alloc_bytes.alloc_bytes:4815376.000000|g
+consul.server-3.dc1.consul.runtime.sys_bytes:13576440.000000|g
+consul.memberlist.gossip:0.006504|ms
+consul.raft.replication.appendEntries.rpc.server-3.dc1.consul:0.003464|ms
+consul.raft.replication.appendEntries.rpc.server-3.dc1.consul:0.003024|ms
+consul.raft.replication.appendEntries.rpc.server-3.dc1.consul:0.014557|ms
+consul.memberlist.udp.sent:27.000000|c
+consul.memberlist.udp.received:154.000000|c
