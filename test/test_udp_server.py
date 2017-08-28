@@ -28,6 +28,7 @@ class TestUDPServer(unittest.TestCase):
                                                               'example.com')
             udp_server = UDPServer('example.com', 8125,
                                    default_telemetry_regex)
+            time.sleep(0)
 
             mock_socket.return_value.bind.assert_called_with(('example.com',
                                                               8125))
@@ -37,6 +38,9 @@ class TestUDPServer(unittest.TestCase):
         with udp_server.lock:
             actual_response = deepcopy(udp_server.stats)
         udp_server.terminate.set()
+
+        while udp_server.isAlive():
+            time.sleep(0.5)
 
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
@@ -88,14 +92,15 @@ class TestUDPServer(unittest.TestCase):
             udp_server = UDPServer('example.com', 8125, default_telemetry_regex,
                                    enhanced_metrics=True, exclude_regex=exclude_regex)
 
-            mock_socket.return_value.bind.assert_called_with(('example.com',
-                                                              8125))
         udp_server.sanitize_data(sample_data)
         time.sleep(1)
 
         with udp_server.lock:
             actual_response = deepcopy(udp_server.stats)
         udp_server.terminate.set()
+
+        while udp_server.isAlive():
+            time.sleep(0.5)
 
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
@@ -147,14 +152,15 @@ class TestUDPServer(unittest.TestCase):
                                    enhanced_metrics=False, exclude_regex=include_regex,
                                    include_regex=include_regex)
 
-            mock_socket.return_value.bind.assert_called_with(('example.com',
-                                                              8125))
         udp_server.sanitize_data(sample_data)
         time.sleep(1)
 
         with udp_server.lock:
             actual_response = deepcopy(udp_server.stats)
         udp_server.terminate.set()
+
+        while udp_server.isAlive():
+            time.sleep(0.5)
 
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
