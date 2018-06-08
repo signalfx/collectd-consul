@@ -15,8 +15,8 @@ PLUGIN_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 @pytest.mark.parametrize("version", [
     "0.8.0",
-    # "1.1.0",
-    # "latest",
+    "1.1.0",
+    "latest",
 ])
 def test_basic_metrics(version):
     serverconfig = '{"telemetry": {"statsd_address": "%s:8125"}}'
@@ -102,5 +102,5 @@ def test_basic_metrics(version):
                         collectd.reconfig(config.format(server1=server1_ip, server2=server2_ip,
                                           server3=server3_ip, client=client_ip,
                                           telemetry_server=True, collectd=collectd.ip))
-                        assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul")), \
+                        assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul"), 60), \
                             "Didn't received a consul datapoint"
