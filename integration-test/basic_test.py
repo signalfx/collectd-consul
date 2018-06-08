@@ -19,13 +19,7 @@ PLUGIN_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     # "latest",
 ])
 def test_basic_metrics(version):
-    serverconfig = dedent("""
-        {
-            "telemetry": {
-                "statsd_address": "{server1}:8125"
-            }
-        }
-    """)
+    serverconfig = '{"telemetry": {"statsd_address": "%s:8125"}}'
     config = dedent("""
         LoadPlugin python
 
@@ -65,42 +59,53 @@ def test_basic_metrics(version):
         </Module>
         </Plugin>
     """)
-    with run_container("consul:%s" % version,
-                       command=['consul', 'agent', '-node=server-1', '-server', '-bootstrap',
-                                '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16a',
-                                '-data-dir=/tmp/data', '-config-dir=/consul/config',
-                                '-client=0.0.0.0']) as server1:
-        server1_ip = container_ip(server1)
+    with run_collectd(config.format(server1='0.0.0.0', server2='0.0.0.0',
+                                    server3='0.0.0.0', client='0.0.0.0',
+                                    telemetry_server=False, collectd='0.0.0.0'), PLUGIN_DIR) as (ingest, collectd):
+        with open('/tmp/%s/server1.json' % collectd.ip, 'w') as conf_file:
+            conf_file.write(serverconfig % collectd.ip)
+            conf_file.flush()
+
         with run_container("consul:%s" % version,
-                           command=['consul', 'agent', '-node=server-2',
-                                    '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16b',
-                                    '-server', '-retry-join=%s' % server1_ip,
-                                    '-data-dir=/tmp/data', '-client=0.0.0.0']) as server2:
-            server2_ip = container_ip(server2)
+                           command=['consul', 'agent', '-node=server-1', '-server', '-bootstrap',
+                                    '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16a',
+                                    '-data-dir=/tmp/data', '-config-dir=/consul/config',
+                                    '-client=0.0.0.0'],
+                           volumes={'/tmp/server1.json': {'bind': '/consul/config/server1.json'}}) as server1:
+            server1_ip = container_ip(server1)
             with run_container("consul:%s" % version,
-                               command=[
-                                    'consul', 'agent', '-node=server-3',
-                                    '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16c',
-                                    '-server', '-retry-join=%s' % server1_ip,
-                                    '-data-dir=/tmp/data', '-client=0.0.0.0'
-                                ]) as server3:
-                server3_ip = container_ip(server3)
+                               command=['consul', 'agent', '-node=server-2',
+                                        '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16b',
+                                        '-server', '-retry-join=%s' % server1_ip,
+                                        '-data-dir=/tmp/data', '-client=0.0.0.0']) as server2:
+                server2_ip = container_ip(server2)
                 with run_container("consul:%s" % version,
                                    command=[
-                                       'consul', 'agent', '-node=client',
-                                       '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16d',
-                                       '-retry-join=%s' % server1_ip,
-                                       '-data-dir=/tmp/data', '-client=0.0.0.0'
-                                   ]) as client:
-                    client_ip = container_ip(client)
-                    with run_collectd(
-                        config.format(server1=server1_ip, server2=server2_ip,
-                                      server3=server3_ip, client=client_ip,
-                                      telemetry_server=False, collectd='0.0.0.0'),
-                            PLUGIN_DIR) as (ingest, _):
-                        server1.restart()
-                        server2.restart()
-                        server3.restart()
-                        client.restart()
-                        assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul")), \
-                            "Didn't received a consul datapoint"
+                                        'consul', 'agent', '-node=server-3',
+                                        '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16c',
+                                        '-server', '-retry-join=%s' % server1_ip,
+                                        '-data-dir=/tmp/data', '-client=0.0.0.0'
+                                    ]) as server3:
+                    server3_ip = container_ip(server3)
+                    with run_container("consul:%s" % version,
+                                       command=[
+                                        'consul', 'agent', '-node=client',
+                                        '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16d',
+                                        '-retry-join=%s' % server1_ip,
+                                        '-data-dir=/tmp/data', '-client=0.0.0.0'
+                                       ]) as client:
+                        client_ip = container_ip(client)
+                        with run_collectd(
+                            config.format(server1=server1_ip, server2=server2_ip,
+                                          server3=server3_ip, client=client_ip,
+                                          telemetry_server=False, collectd='0.0.0.0'),
+                                PLUGIN_DIR) as (ingest, _):
+                            collectd.reconfig(config.format(server1=server1_ip, server2=server2_ip,
+                                              server3=server3_ip, client=client_ip,
+                                              telemetry_server=True, collectd=collectd.ip))
+                            server1.restart()
+                            server2.restart()
+                            server3.restart()
+                            client.restart()
+                            assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul")), \
+                                "Didn't received a consul datapoint"
