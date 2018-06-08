@@ -62,7 +62,8 @@ def test_basic_metrics(version):
     with run_collectd(config.format(server1='0.0.0.0', server2='0.0.0.0',
                                     server3='0.0.0.0', client='0.0.0.0',
                                     telemetry_server=False, collectd='0.0.0.0'), PLUGIN_DIR) as (ingest, collectd):
-        with open('/tmp/%s/server1.json' % collectd.ip, 'w') as conf_file:
+        tempfile_path = '/tmp/%s/server1.json' % collectd.ip.strip('.')
+        with open(tempfile_path, 'w') as conf_file:
             conf_file.write(serverconfig % collectd.ip)
             conf_file.flush()
 
@@ -71,7 +72,7 @@ def test_basic_metrics(version):
                                     '-node-id=31de20e0-43fc-43b0-8bbf-436f1db7e16a',
                                     '-data-dir=/tmp/data', '-config-dir=/consul/config',
                                     '-client=0.0.0.0'],
-                           volumes={'/tmp/server1.json': {'bind': '/consul/config/server1.json'}}) as server1:
+                           volumes={tempfile_path: {'bind': '/consul/config/server1.json'}}) as server1:
             server1_ip = container_ip(server1)
             with run_container("consul:%s" % version,
                                command=['consul', 'agent', '-node=server-2',
