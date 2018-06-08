@@ -37,11 +37,12 @@ jobs:
           pip install -r test_requirements.txt
         - run:
           name: Execute Tests
+          command: |
           bash verify.sh
 
 workflows:
   version: 2
   build_test:
     jobs:
-    - unittest
-    - integration-test
+      - unittest
+      - integration-test
