@@ -941,7 +941,7 @@ class ConsulAgent(object):
     def check_metrics_endpoint_available(self):
         # /agent/metrics endpoint is available from version 0.9.1
         major, minor, revision = map(lambda x: int(x),
-                                     self.config.get('Config', {}).get('Version', '').split('.'))
+                                     self.config.get('Config', {}).get('Version', '0.0.0').split('.'))
 
         if (major == 0 and minor == 9 and revision >= 1) or major > 0:
             return True
@@ -1158,7 +1158,7 @@ class ConsulAgent(object):
 
         dimensions['datacenter'] = self.config.get('Config', {}).get('Datacenter', '')
         dimensions['consul_node'] = self.config.get('Config', {}).get('NodeName', '')
-        if self.config.get('Config', '').get('Server', None):
+        if self.config.get('Config', {}).get('Server', False):
             dimensions['consul_mode'] = 'server'
         else:
             dimensions['consul_mode'] = 'client'
