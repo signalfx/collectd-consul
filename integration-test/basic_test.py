@@ -99,17 +99,8 @@ def test_basic_metrics(version):
                                         '-data-dir=/tmp/data', '-client=0.0.0.0'
                                        ]) as client:
                         client_ip = container_ip(client)
-                        with run_collectd(
-                            config.format(server1=server1_ip, server2=server2_ip,
+                        collectd.reconfig(config.format(server1=server1_ip, server2=server2_ip,
                                           server3=server3_ip, client=client_ip,
-                                          telemetry_server=False, collectd='0.0.0.0'),
-                                PLUGIN_DIR) as (ingest, _):
-                            collectd.reconfig(config.format(server1=server1_ip, server2=server2_ip,
-                                              server3=server3_ip, client=client_ip,
-                                              telemetry_server=True, collectd=collectd.ip))
-                            server1.restart()
-                            server2.restart()
-                            server3.restart()
-                            client.restart()
-                            assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul")), \
-                                "Didn't received a consul datapoint"
+                                          telemetry_server=True, collectd=collectd.ip))
+                        assert wait_for(p(has_datapoint_with_dim, ingest, "plugin", "consul")), \
+                            "Didn't received a consul datapoint"
