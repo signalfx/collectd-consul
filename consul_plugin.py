@@ -569,8 +569,7 @@ class ConsulPlugin(object):
         # If the current instance is running in server mode and is a follower
         dimensions = {}
         metric_records = []
-        if 'Server' in self.consul_agent.config and \
-                self.consul_agent.config['Server']:
+        if self.consul_agent.config.get('Config', {}).get('Server', False):
             LOGGER.debug('Consul node is a peer in follower state.')
             dimensions['consul_server_state'] = 'follower'
             dimensions.update(self.global_dimensions)
@@ -936,14 +935,13 @@ class ConsulAgent(object):
         if not conf:
             self.config = None
             return
-        self.config = conf['Config']
+        self.config = conf
         self.metrics_enabled = self.check_metrics_endpoint_available()
 
     def check_metrics_endpoint_available(self):
-
         # /agent/metrics endpoint is available from version 0.9.1
         major, minor, revision = map(lambda x: int(x),
-                                     self.config['Version'].split('.'))
+                                     self.config.get('Config', {}).get('Version', '').split('.'))
 
         if (major == 0 and minor == 9 and revision >= 1) or major > 0:
             return True
@@ -985,8 +983,17 @@ class ConsulAgent(object):
         '''
         curr_leader = self.get_dc_leader()
 
-        agent_addr = '{0}:{1}'.format(self.config['AdvertiseAddr'],
-                                      self.config['Ports']['Server'])
+        # pre v1.0.0
+        host = self.config.get('Config', {}).get('AdvertiseAddr', None)
+        if not host:
+            host = self.config.get('Member', {}).get('Addr', {})
+
+        # prev 1.0.0
+        port = self.config.get('Config', {}).get('Ports', {}).get('Server', None)
+        if not port:
+            port = self.config.get('DebugConfig', {}).get('ServerPort', None)
+
+        agent_addr = '{0}:{1}'.format(host, port)
         if curr_leader == agent_addr:
             if self.last_leader is not None and \
                self.last_leader != curr_leader and \
@@ -995,7 +1002,7 @@ class ConsulAgent(object):
                 LOGGER.debug('Change in leader.')
                 dimensions = {'old_leader': self.last_leader.split(':')[0],
                               'new_leader': curr_leader.split(':')[0],
-                              'datacenter': self.config['Datacenter']}
+                              'datacenter': self.config.get('Config', {}).get('Datacenter', '')}
                 self._send_leader_change_event(dimensions)
                 self.last_leader = curr_leader
 
@@ -1061,7 +1068,7 @@ class ConsulAgent(object):
 
         agent_dc_coords = {}
         dc_latency_map = {}
-        agent_dc = self.config['Datacenter']
+        agent_dc = self.config.get('Config', {}).get('Datacenter', '')
 
         for idx, dc in enumerate(inter_dc_coords):
             if dc['Datacenter'] == agent_dc:
@@ -1098,7 +1105,7 @@ class ConsulAgent(object):
 
         for idx, node in enumerate(intra_dc_coords):
 
-            if node['Node'] == self.config['NodeName']:
+            if node['Node'] == self.config.get('Config', {}).get('NodeName', None):
                 agent_node_coords = node['Coord']
                 # found the instance, remove it from list
                 intra_dc_coords.pop(idx)
@@ -1149,9 +1156,9 @@ class ConsulAgent(object):
         if self.config is None:
             return dimensions
 
-        dimensions['datacenter'] = self.config['Datacenter']
-        dimensions['consul_node'] = self.config['NodeName']
-        if self.config['Server']:
+        dimensions['datacenter'] = self.config.get('Config', {}).get('Datacenter', '')
+        dimensions['consul_node'] = self.config.get('Config', {}).get('NodeName', '')
+        if self.config.get('Config', '').get('Server', None):
             dimensions['consul_mode'] = 'server'
         else:
             dimensions['consul_mode'] = 'client'
@@ -1180,7 +1187,7 @@ class ConsulAgent(object):
             LOGGER.error('HTTPError - status code: {0}, '
                          'received from {1}'.format(e.code, self._event_url))
         except urllib2.URLError, e:
-            LOGGER.error('URLError - {0}'.format(e.reason))
+            LOGGER.error('URLError - {0} {1}'.format(self._event_url, e.reason))
 
     def _send_request(self, url):
         '''
@@ -1205,7 +1212,7 @@ class ConsulAgent(object):
             LOGGER.error('HTTPError - status code: {0}, '
                          'received from {1}'.format(e.code, url))
         except urllib2.URLError, e:
-            LOGGER.error('URLError - {0}'.format(e.reason))
+            LOGGER.error('URLError - {0} {1}'.format(url, e.reason))
         except ValueError, e:
             LOGGER.error('Error parsing JSON for url {0}. {1}'.format(url, e))
 
