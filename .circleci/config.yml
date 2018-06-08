@@ -27,11 +27,6 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install python2.7
-          command: |
-            apt update
-            apt-get install -y python2.7 python-pip
-      - run:
           name: Install test dependencies
           command: |
             pip install -r test/test_requirements.txt
