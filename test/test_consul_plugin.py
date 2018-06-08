@@ -630,10 +630,10 @@ class TestConsulPlugin(unittest.TestCase):
                      'client_cert': None,
                      'client_key': None}
         agent = consul_plugin.ConsulAgent(api_host, api_port, api_protocol,
-                                            acl_token, sfx_token, ssl_certs)
-        agent.config = self._sample_response('/agent/self')['Config']
+                                          acl_token, sfx_token, ssl_certs)
+        agent.config = self._sample_response('/agent/self')
 
-        mock_agent.config = self._sample_response('/agent/self')['Config']
+        mock_agent.config = self._sample_response('/agent/self')
         mock_agent.metrics_enabled = True
 
         mock_agent.is_leader = MagicMock(return_value=True)

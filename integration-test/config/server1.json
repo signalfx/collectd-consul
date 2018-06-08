@@ -1,3 +1,5 @@
-{"telemetry":{
-  "statsd_address": "collectd:8125"}
+{
+  "telemetry":{
+    "statsd_address": "collectd:8125"
+  }
 }

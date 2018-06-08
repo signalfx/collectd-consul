@@ -42,7 +42,7 @@ class ConsulAgentTest(unittest.TestCase):
         self.agent = ConsulAgent(self.api_host, self.api_port,
                                  self.api_protocol, self.acl_token,
                                  self.sfx_token, self.ssl_certs)
-        self.agent.config = sample_response('/agent/self')['Config']
+        self.agent.config = sample_response('/agent/self')
 
     @mock.patch('urllib2.build_opener')
     def test_return_json_on_ok(self, mock_urllib_opener):
@@ -147,7 +147,7 @@ class ConsulAgentTest(unittest.TestCase):
     def test_check_metrics_endpoint_available(self):
         self.assertTrue(self.agent.check_metrics_endpoint_available())
 
-        self.agent.config['Version'] = '0.9.0'
+        self.agent.config['Config']['Version'] = '0.9.0'
         self.assertFalse(self.agent.check_metrics_endpoint_available())
 
     @mock.patch('consul_plugin.ConsulAgent.get_dc_leader',
@@ -156,7 +156,7 @@ class ConsulAgentTest(unittest.TestCase):
 
         self.assertFalse(self.agent.is_leader())
 
-        self.agent.config['AdvertiseAddr'] = '10.2.5.60'
+        self.agent.config['Config']['AdvertiseAddr'] = '10.2.5.60'
         self.assertTrue(self.agent.is_leader())
 
     def _mock_get_services_for_node(self, node):
