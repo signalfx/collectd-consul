@@ -13,10 +13,6 @@ jobs:
             sudo apt update && sudo apt install -yq python3-pip
             pip install -r integration-test/test_requirements.txt
       - run:
-          name: Run basic tests
-          working_directory: ~/code
-          command: bash verify.sh
-      - run:
           name: Run integration tests
           working_directory: ~/code
           command: pytest -n4 integration_tests
