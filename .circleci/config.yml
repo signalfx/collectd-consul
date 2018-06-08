@@ -11,11 +11,11 @@ jobs:
           working_directory: ~/code
           command: |
             sudo apt update && sudo apt install -yq python3-pip
-            pip3 install -r integration-test/test_requirements.txt
+            pip install -r integration-test/test_requirements.txt
       - run:
           name: Run Integration Tests
           working_directory: ~/code
-          command: pytest -n4 integration_test
+          command: pytest -n4 integration-test
   unittest:
     docker:
       - image: python:2.7-stretch
