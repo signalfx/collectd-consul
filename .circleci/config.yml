@@ -10,7 +10,7 @@ jobs:
           name: Install dependencies
           working_directory: ~/code
           command: |
-            sudo apt update && sudo apt install -yq python3-pip python2-pip
+            sudo apt update && sudo apt install -yq python3-pip
             pip install -r integration-test/test_requirements.txt
       - run:
           name: Run basic tests
