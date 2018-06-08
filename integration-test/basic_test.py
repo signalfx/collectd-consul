@@ -62,7 +62,10 @@ def test_basic_metrics(version):
     with run_collectd(config.format(server1='0.0.0.0', server2='0.0.0.0',
                                     server3='0.0.0.0', client='0.0.0.0',
                                     telemetry_server=False, collectd='0.0.0.0'), PLUGIN_DIR) as (ingest, collectd):
-        tempfile_path = '/tmp/%s/server1.json' % collectd.ip.strip('.')
+        tempfile_path = '/tmp/%s' % collectd.ip.replace('.', '')
+        if not os.path.exists(tempfile_path):
+            os.makedirs(tempfile_path)
+        tempfile_path = tempfile_path + '/server1.json'
         with open(tempfile_path, 'w') as conf_file:
             conf_file.write(serverconfig % collectd.ip)
             conf_file.flush()
