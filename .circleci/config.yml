@@ -27,22 +27,22 @@ jobs:
     steps:
       - checkout
       - run:
-        name: Install python2.7
-        command: |
-        apt update
-        apt-get install -y python2.7 python-pip
+          name: Install python2.7
+          command: |
+          apt update
+          apt-get install -y python2.7 python-pip
       - run:
-        name: Install test dependencies
-        command: |
-        pip install -r test_requirements.txt
+          name: Install test dependencies
+          command: |
+          pip install -r test_requirements.txt
       - run:
-        name: Execute Tests
-        command: |
-        bash verify.sh
+          name: Execute Tests
+          command: |
+          bash verify.sh
 
 workflows:
   version: 2
-  build_test:
+  build:
     jobs:
       - unittest
       - integration-test
