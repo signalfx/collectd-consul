@@ -16,32 +16,34 @@ with open(dir_path + '/sample_packet', 'r') as f:
     sample_data = f.read()
 
 
+def wait_for_udp_server(mock_socket, host, port, timeout=120):
+    timeout_ts = time.time() + timeout
+    while time.time() < timeout_ts:
+        try:
+            mock_socket.return_value.bind.assert_called_with((host, port))
+            return True
+        except AssertionError:
+            time.sleep(0.5)
+    return False
+
+
+def wait_for_data_to_be_processed(udp_server, expected_stats, timeout=120):
+    """
+    helper function for udp server tests to wait for metrics to be processed
+    """
+    timeout_ts = time.time() + timeout
+    while time.time() < timeout_ts:
+        with udp_server.lock:
+            if len(udp_server.stats) >= len(expected_stats):
+                return True
+        time.sleep(1)
+    return False
+
+
 class TestUDPServer(unittest.TestCase):
 
     def test_udp_server(self):
         self.maxDiff = None
-
-        default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
-                                             for x in default_telemetry))
-        with mock.patch('socket.socket') as mock_socket:
-            mock_socket.return_value.recvfrom.return_value = ('',
-                                                              'example.com')
-            udp_server = UDPServer('example.com', 8125,
-                                   default_telemetry_regex)
-            time.sleep(0)
-
-            mock_socket.return_value.bind.assert_called_with(('example.com',
-                                                              8125))
-        udp_server.sanitize_data(sample_data)
-        time.sleep(2)
-
-        with udp_server.lock:
-            actual_response = deepcopy(udp_server.stats)
-        udp_server.terminate.set()
-
-        while udp_server.isAlive():
-            time.sleep(0.5)
-
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
         rpc_mean = rpc_mean/3
@@ -71,29 +73,21 @@ class TestUDPServer(unittest.TestCase):
                            }
                           }
 
-        self.assertEquals(set(actual_response.keys()),
-                          set(expected_stats.keys()))
-
-        for k, v in expected_stats.items():
-            self.assertTrue(set(v.items()).issubset(
-                set(actual_response[k].items())))
-
-    def test_udp_server_with_enhanced_metrics(self):
-
-        exclude_metrics = ['consul.memberlist']
-        exclude_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
-                                            for x in exclude_metrics))
         default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
                                              for x in default_telemetry))
-
         with mock.patch('socket.socket') as mock_socket:
             mock_socket.return_value.recvfrom.return_value = ('',
                                                               'example.com')
-            udp_server = UDPServer('example.com', 8125, default_telemetry_regex,
-                                   enhanced_metrics=True, exclude_regex=exclude_regex)
+            udp_server = UDPServer('example.com', 8125,
+                                   default_telemetry_regex)
+
+            if not wait_for_udp_server(mock_socket, 'example.com', 8125, timeout=120):
+                self.fail('timed out waiting for the udp server to be active')
 
         udp_server.sanitize_data(sample_data)
-        time.sleep(1)
+
+        if not wait_for_data_to_be_processed(udp_server, expected_stats, 120):
+            self.fail(msg="test timed out waiting for sanitized metrics")
 
         with udp_server.lock:
             actual_response = deepcopy(udp_server.stats)
@@ -102,6 +96,14 @@ class TestUDPServer(unittest.TestCase):
         while udp_server.isAlive():
             time.sleep(0.5)
 
+        self.assertEquals(set(actual_response.keys()),
+                          set(expected_stats.keys()))
+
+        for k, v in expected_stats.items():
+            self.assertTrue(set(v.items()).issubset(
+                set(actual_response[k].items())))
+
+    def test_udp_server_with_enhanced_metrics(self):
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
         rpc_mean = rpc_mean/3
@@ -127,6 +129,32 @@ class TestUDPServer(unittest.TestCase):
                           {'value': 4815376.0,
                            'type': 'gauge'}
                           }
+        exclude_metrics = ['consul.memberlist']
+        exclude_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                            for x in exclude_metrics))
+        default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                             for x in default_telemetry))
+
+        with mock.patch('socket.socket') as mock_socket:
+            mock_socket.return_value.recvfrom.return_value = ('',
+                                                              'example.com')
+            udp_server = UDPServer('example.com', 8125, default_telemetry_regex,
+                                   enhanced_metrics=True, exclude_regex=exclude_regex)
+
+            if not wait_for_udp_server(mock_socket, 'example.com', 8125, timeout=120):
+                self.fail('timed out waiting for the udp server to be active')
+
+        udp_server.sanitize_data(sample_data)
+
+        if not wait_for_data_to_be_processed(udp_server, expected_stats, 120):
+            self.fail(msg="test timed out waiting for sanitized metrics")
+
+        with udp_server.lock:
+            actual_response = deepcopy(udp_server.stats)
+        udp_server.terminate.set()
+
+        while udp_server.isAlive():
+            time.sleep(0.5)
 
         self.assertEquals(set(actual_response.keys()),
                           set(expected_stats.keys()))
@@ -136,32 +164,6 @@ class TestUDPServer(unittest.TestCase):
                 actual_response[k].items())))
 
     def test_udp_server_with_include_metrics(self):
-
-        include_metrics = ['consul.memberlist.gossip',
-                           'consul.memberlist.udp.received',
-                           'consul.server-3.dc1.consul.runtime.sys_bytes']
-        include_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
-                                            for x in include_metrics))
-        default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
-                                             for x in default_telemetry))
-
-        with mock.patch('socket.socket') as mock_socket:
-            mock_socket.return_value.recvfrom.return_value = ('',
-                                                              'example.com')
-            udp_server = UDPServer('example.com', 8125, default_telemetry_regex,
-                                   enhanced_metrics=False, exclude_regex=include_regex,
-                                   include_regex=include_regex)
-
-        udp_server.sanitize_data(sample_data)
-        time.sleep(1)
-
-        with udp_server.lock:
-            actual_response = deepcopy(udp_server.stats)
-        udp_server.terminate.set()
-
-        while udp_server.isAlive():
-            time.sleep(0.5)
-
         rpc_list = [0.003464, 0.003024, 0.014557]
         rpc_mean = reduce(lambda x, y: x + y, [0.003464, 0.003024, 0.014557])
         rpc_mean = rpc_mean/3
@@ -202,6 +204,35 @@ class TestUDPServer(unittest.TestCase):
                            'type': 'gauge'
                            }
                           }
+        include_metrics = ['consul.memberlist.gossip',
+                           'consul.memberlist.udp.received',
+                           'consul.server-3.dc1.consul.runtime.sys_bytes']
+        include_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                            for x in include_metrics))
+        default_telemetry_regex = re.compile('|'.join('(?:{0})'.format(re.escape(x))
+                                             for x in default_telemetry))
+
+        with mock.patch('socket.socket') as mock_socket:
+            mock_socket.return_value.recvfrom.return_value = ('',
+                                                              'example.com')
+            udp_server = UDPServer('example.com', 8125, default_telemetry_regex,
+                                   enhanced_metrics=False, exclude_regex=include_regex,
+                                   include_regex=include_regex)
+            
+            if not wait_for_udp_server(mock_socket, 'example.com', 8125, timeout=120):
+                self.fail('timed out waiting for the udp server to be active')
+
+        udp_server.sanitize_data(sample_data)
+
+        if not wait_for_data_to_be_processed(udp_server, expected_stats, 120):
+            self.fail(msg="test timed out waiting for sanitized metrics")
+
+        with udp_server.lock:
+            actual_response = deepcopy(udp_server.stats)
+        udp_server.terminate.set()
+
+        while udp_server.isAlive():
+            time.sleep(0.5)
 
         self.assertEquals(set(actual_response.keys()),
                           set(expected_stats.keys()))
