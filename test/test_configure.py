@@ -38,9 +38,9 @@ class TestConfiure(unittest.TestCase):
                          'debug': False}
         consul_plugin.configure_callback(mock_conf)
         args, kwargs = mock_plugin.call_args
-        for k, v in args[0].items():
+        for k, v in list(args[0].items()):
             self.assertIn(k, expected_conf)
-            self.assertEquals(v, expected_conf[k])
+            self.assertEqual(v, expected_conf[k])
 
     @mock.patch('consul_plugin.ConsulPlugin')
     def test_all_config(self, mock_plugin):
@@ -183,14 +183,14 @@ class TestConfiure(unittest.TestCase):
 
         consul_plugin.configure_callback(mock_conf)
         args, kwargs = mock_plugin.call_args
-        for k, v in args[0].items():
+        for k, v in list(args[0].items()):
             if k not in ['exclude_metrics_regex',
                          'include_metrics_regex',
                          'default_telemetry_regex']:
                 self.assertIn(k, expected_conf)
-                self.assertEquals(v, expected_conf[k])
+                self.assertEqual(v, expected_conf[k])
             else:
-                self.assertEquals(v.pattern, expected_conf[k].pattern)
+                self.assertEqual(v.pattern, expected_conf[k].pattern)
 
         consul_plugin.collectd.register_read.assert_called_once()
         consul_plugin.collectd.register_read.assert_called_with(
