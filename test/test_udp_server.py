@@ -6,6 +6,7 @@ import os
 from copy import deepcopy
 import time
 import re
+from functools import reduce
 sys.path.insert(0, os.path.dirname(__file__))
 
 sys.modules['collectd'] = mock.Mock()
@@ -96,10 +97,10 @@ class TestUDPServer(unittest.TestCase):
         while udp_server.isAlive():
             time.sleep(0.5)
 
-        self.assertEquals(set(actual_response.keys()),
+        self.assertEqual(set(actual_response.keys()),
                           set(expected_stats.keys()))
 
-        for k, v in expected_stats.items():
+        for k, v in list(expected_stats.items()):
             self.assertTrue(set(v.items()).issubset(
                 set(actual_response[k].items())))
 
@@ -156,10 +157,10 @@ class TestUDPServer(unittest.TestCase):
         while udp_server.isAlive():
             time.sleep(0.5)
 
-        self.assertEquals(set(actual_response.keys()),
+        self.assertEqual(set(actual_response.keys()),
                           set(expected_stats.keys()))
 
-        for k, v in expected_stats.items():
+        for k, v in list(expected_stats.items()):
             self.assertTrue(set(v.items()).issubset(set(
                 actual_response[k].items())))
 
@@ -234,10 +235,10 @@ class TestUDPServer(unittest.TestCase):
         while udp_server.isAlive():
             time.sleep(0.5)
 
-        self.assertEquals(set(actual_response.keys()),
+        self.assertEqual(set(actual_response.keys()),
                           set(expected_stats.keys()))
 
-        for k, v in expected_stats.items():
+        for k, v in list(expected_stats.items()):
             self.assertTrue(set(v.items()).issubset(set(
                 actual_response[k].items())))
 
