@@ -11,7 +11,7 @@ jobs:
           working_directory: ~/code
           command: |
             sudo apt update && sudo apt install -yq python3-pip
-            pyenv global 3.5.2
+            pyenv global 3.6.2
             pip install -r integration-test/test_requirements.txt
       - run:
           name: Run Integration Tests
