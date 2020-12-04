@@ -17,7 +17,7 @@ PLUGIN = "consul"
 
 def _check_split(splitted_list):
     """
-    checks for malformed data on split
+    checks for malformed data on split test
     """
     if len(splitted_list) == 2 and "" not in splitted_list:
         return True
