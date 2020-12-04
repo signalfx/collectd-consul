@@ -2,7 +2,7 @@ version: '2'
 jobs:
   integration-test:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:202007-01
     working_directory: ~/code
     steps:
       - checkout
@@ -11,7 +11,7 @@ jobs:
           working_directory: ~/code
           command: |
             sudo apt update && sudo apt install -yq python3-pip
-            pyenv global 3.6.2
+            pyenv global 3.8.3
             pip install -r integration-test/test_requirements.txt
       - run:
           name: Run Integration Tests
