@@ -8,6 +8,7 @@ import time
 from functools import reduce
 
 from six.moves import urllib
+from distutils.version import LooseVersion as V
 
 import collectd
 import urllib_ssl_handler
@@ -924,12 +925,8 @@ class ConsulAgent(object):
         self.metrics_enabled = self.check_metrics_endpoint_available()
 
     def check_metrics_endpoint_available(self):
-        # /agent/metrics endpoint is available from version 0.9.1
-        major, minor, revision = [int(x) for x in self.config.get("Config", {}).get("Version", "0.0.0").split(".")]
-
-        if (major == 0 and minor == 9 and revision >= 1) or major > 0:
-            return True
-        return False
+        version = self.config.get("Config", {}).get("Version", "0.0.0")
+        return V(version) >= V('0.9.1')
 
     def get_local_config(self):
         return self._send_request(self.local_config_url)

@@ -150,6 +150,12 @@ class ConsulAgentTest(unittest.TestCase):
 
         self.agent.config["Config"]["Version"] = "0.9.0"
         self.assertFalse(self.agent.check_metrics_endpoint_available())
+        
+        self.agent.config["Config"]["Version"] = "1.8.1+ent"
+        self.assertTrue(self.agent.check_metrics_endpoint_available())
+
+        self.agent.config["Config"]["Version"] = "0.8.1+ent"
+        self.assertFalse(self.agent.check_metrics_endpoint_available())
 
     @mock.patch("consul_plugin.ConsulAgent.get_dc_leader", return_value=sample_response("/status/leader"))
     def test_is_leader(self, mock_call):
