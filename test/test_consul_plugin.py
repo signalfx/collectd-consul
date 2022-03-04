@@ -201,6 +201,9 @@ class TestConsulPlugin(unittest.TestCase):
 
         expected_records = []
         dimensions = self.plugin.global_dimensions
+        api_dimensions = dict(dimensions)
+        api_dimensions.update({ "method": "GET", "path": "v1_agent_metrics" })
+
         expected_records.append(
             consul_plugin.MetricRecord(
                 "consul.consul.fsm.coordinate.batch-update.avg", "gauge", 0.05109499953687191, dimensions
@@ -268,6 +271,10 @@ class TestConsulPlugin(unittest.TestCase):
         expected_records.append(consul_plugin.MetricRecord("consul.memberlist.udp.sent", "gauge", 2174, dimensions))
         expected_records.append(consul_plugin.MetricRecord("consul.memberlist.tcp.sent", "gauge", 1458, dimensions))
         expected_records.append(consul_plugin.MetricRecord("consul.memberlist.tcp.accept", "gauge", 1, dimensions))
+        expected_records.append(
+            consul_plugin.MetricRecord("consul.api.http", "gauge", 6.331398844718933, api_dimensions
+            )
+        )
 
         self.plugin.enhanced_metrics = True
         self.plugin.exclude_regex = None
@@ -282,6 +289,8 @@ class TestConsulPlugin(unittest.TestCase):
 
         expected_records = []
         dimensions = self.plugin.global_dimensions
+        api_dimensions = dict(dimensions)
+        api_dimensions.update({ "method": "GET", "path": "v1_agent_metrics" })
         expected_records.append(
             consul_plugin.MetricRecord(
                 "consul.consul.fsm.coordinate.batch-update.avg", "gauge", 0.05109499953687191, dimensions
@@ -331,6 +340,10 @@ class TestConsulPlugin(unittest.TestCase):
             )
         )
         expected_records.append(consul_plugin.MetricRecord("consul.memberlist.udp.received", "gauge", 2174, dimensions))
+        expected_records.append(
+            consul_plugin.MetricRecord("consul.api.http", "gauge", 6.331398844718933, api_dimensions
+            )
+        )
         self.plugin.enhanced_metrics = True
         exclude = [
             "consul.memberlist.udp.sent",
@@ -380,6 +393,7 @@ class TestConsulPlugin(unittest.TestCase):
                 "consul.memberlist.tcp.sent",
                 "consul.memberlist.tcp.accept",
                 "consul.ip-10-2-2-84.ec2.internal.runtime.alloc_bytes",
+                "consul.api.http",
             ]
         )
 
@@ -442,14 +456,14 @@ class TestConsulPlugin(unittest.TestCase):
     def test_read_for_leader_enhanced_mode(self):
         self.plugin.enhanced_metrics = True
         self.plugin.read()
-        self.assertEqual(42, len(self.plugin.metric_sink.captured_records))
+        self.assertEqual(43, len(self.plugin.metric_sink.captured_records))
 
     def test_read_for_leader_enhanced_mode_with_exclude(self):
         self.plugin.enhanced_metrics = True
         exclude = ["consul.memberlist"]
         self.plugin.exclude_regex = re.compile("|".join("(?:{0})".format(re.escape(x)) for x in exclude))
         self.plugin.read()
-        self.assertEqual(35, len(self.plugin.metric_sink.captured_records))
+        self.assertEqual(36, len(self.plugin.metric_sink.captured_records))
 
     def test_read_for_leader_with_include(self):
         include = ["consul.memberlist"]
