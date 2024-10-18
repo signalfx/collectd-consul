@@ -1,5 +1,7 @@
 >ℹ️&nbsp;&nbsp;SignalFx was acquired by Splunk in October 2019. See [Splunk SignalFx](https://www.splunk.com/en_us/investor-relations/acquisitions/signalfx.html) for more information.
 
+:warning: This plugin is deprecated. Please use the [statsd receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver) or the [prometheus receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver) to collect Consul metrics instead. Please consult the [Hashicorp documentation](https://developer.hashicorp.com/consul/docs/agent/monitor/telemetry) for more information. :warning:
+
 # collectd Consul Plugin
 
 A consul collectd plugin which users can use to send metrics from consul agent to SignalFx.
