@@ -843,20 +843,24 @@ class ConsulPlugin(object):
         return False
 
     def _sanitize_telemetry(self, metric_type, metric):
+        dimensions = {}
+        dimensions.update(self.global_dimensions)
+        if "Labels" in metric:
+            dimensions.update(metric["Labels"])
         if metric_type == "Gauges":
-            return [MetricRecord(metric["Name"], "gauge", metric["Value"], self.global_dimensions, time.time())]
+            return [MetricRecord(metric["Name"], "gauge", metric["Value"], dimensions, time.time())]
         elif metric_type == "Counters":
-            return [MetricRecord(metric["Name"], "gauge", metric["Sum"], self.global_dimensions, time.time())]
+            return [MetricRecord(metric["Name"], "gauge", metric["Sum"], dimensions, time.time())]
         elif metric_type == "Samples":
             metric_records = []
             metric_avg = "{0}.avg".format(metric["Name"])
             metric_max = "{0}.max".format(metric["Name"])
             metric_min = "{0}.min".format(metric["Name"])
             metric_records.append(
-                MetricRecord(metric_avg, "gauge", metric["Mean"], self.global_dimensions, time.time())
+                MetricRecord(metric_avg, "gauge", metric["Mean"], dimensions, time.time())
             )
-            metric_records.append(MetricRecord(metric_max, "gauge", metric["Max"], self.global_dimensions, time.time()))
-            metric_records.append(MetricRecord(metric_min, "gauge", metric["Min"], self.global_dimensions, time.time()))
+            metric_records.append(MetricRecord(metric_max, "gauge", metric["Max"], dimensions, time.time()))
+            metric_records.append(MetricRecord(metric_min, "gauge", metric["Min"], dimensions, time.time()))
             return metric_records
 
     def shutdown(self):
